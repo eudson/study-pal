@@ -56,5 +56,9 @@ Sequencing rule for cross-stack features: schema → migration → backend servi
 ## Definition of done (every task)
 `make lint` clean, `make test` green (fixtures included), codegen current, no TODOs left silently, one-paragraph summary of what changed and why.
 
+## Work tracking
+- `docs/studypal-build-plan.md` is the single source of truth for tasks. Mark completed items in place with ✅ and the date.
+- After every working session, the orchestrator appends a dated entry to `docs/PROGRESS.md`: what was done, verification results (lint/tests/fixtures), what's next, and any blockers flagged `ARCHITECT DECISION NEEDED`.
+
 ## When in doubt
 Ask the architect. For a second opinion first, spawn `advisor` — it will judge the proposal against ARCHITECTURE.md and say APPROVE / REVISE / ESCALATE.
