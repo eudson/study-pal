@@ -31,6 +31,10 @@ export default defineConfig({
     }),
   ],
   server: {
+    // Bind all interfaces so the dev server is reachable through the
+    // docker-compose port mapping (not just container-localhost).
+    host: true,
+    port: 5173,
     proxy: {
       "/health": {
         target: apiProxyTarget,
