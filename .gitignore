@@ -1,0 +1,17 @@
+# Raw fixture photos/PDFs contain a child's handwriting and school documents —
+# they stay local only. Only transcribed JSON (submissions, mark decisions,
+# manifests) is committed; the CI gates use JSON, not photos.
+
+.env*
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+web/dist/
+.DS_Store
+fixtures/**/inputs/*.jpg
+fixtures/**/inputs/*.png
+fixtures/**/inputs/*.pdf
+fixtures/**/answers/*.jpg
+fixtures/**/answers/*.png
+fixtures/**/answers/*.pdf

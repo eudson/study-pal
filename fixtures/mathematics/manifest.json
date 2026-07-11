@@ -1,0 +1,64 @@
+{
+  "grade_label": "Grade 5",
+  "curriculum": "IEB CAPS",
+  "school": "Reddam House Waterfall",
+  "content_language": "en",
+  "cycle_period": "2026-05/06 (mid-year exam prep, manual chat-based cycles)",
+  "artefacts": {
+    "inputs": "PENDING — architect to drop scope/workbook photos + exam booklet extract",
+    "answers": "PENDING — architect to drop completed-paper photos + transcribe to Submission JSON",
+    "marks": "PENDING — architect to drop historical per-question mark decisions",
+    "expected": "GENERATED in Week 1 from inputs, then frozen"
+  },
+  "status": "artefacts_pending",
+  "subject": "Mathematics",
+  "structure": "100 marks, 7 sections: Whole Numbers; Addition & Patterns; Multiplication & Division; Fractions; Measurement; Geometry; Data Handling. Non-calculator, working space inline.",
+  "baseline": {
+    "variant_A_total": 49,
+    "variant_A_note": "ESTIMATE — crossed-out work, ambiguous digits, sections F & G not attempted (no Geometry/Data baseline)",
+    "variant_B_total": null,
+    "variant_B_note": "Variant B built with deliberate retargets (Q4 inverse ops, Q10 pattern table, Q15 step lines, Q19c mixed numbers, Q20b fraction-of-amount, Q23 conversions); completed score not recorded in project history"
+  },
+  "known_gaps": [
+    {
+      "gap_id": "unit_conversions_decimal",
+      "category": "concept_gap",
+      "description": "Systematic decimal placement errors across ALL measurement conversion types"
+    },
+    {
+      "gap_id": "fractions_cluster",
+      "category": "concept_gap",
+      "description": "Five sub-gaps: numerator/denominator written upside-down; wrong comparison method (rule: 'make the bottoms match'); improper fractions not converted to mixed numbers; fraction-of-amount using only the denominator step"
+    },
+    {
+      "gap_id": "time_duration_method",
+      "category": "concept_gap",
+      "description": "Duration calculated by subtraction instead of counting forward"
+    },
+    {
+      "gap_id": "inverse_operations",
+      "category": "concept_gap",
+      "description": "Inverse operations in number sentences"
+    },
+    {
+      "gap_id": "multi_step_abandonment",
+      "category": "format_misread",
+      "description": "Multi-step word problems abandoned after one step"
+    },
+    {
+      "gap_id": "self_correction_pattern",
+      "category": "careless",
+      "description": "Crosses out CORRECT answers and replaces with wrong ones"
+    },
+    {
+      "gap_id": "sections_unattempted",
+      "category": "not_attempted",
+      "description": "Sections F (Geometry) and G (Data Handling) blank in Variant A"
+    }
+  ],
+  "tolerance": {
+    "total_marks": 4.0,
+    "closed_agreement": 0.85,
+    "note": "Loosest tolerance — historical total was itself an estimate"
+  }
+}

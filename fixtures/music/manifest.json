@@ -1,0 +1,46 @@
+{
+  "grade_label": "Grade 5",
+  "curriculum": "IEB CAPS",
+  "school": "Reddam House Waterfall",
+  "content_language": "en",
+  "cycle_period": "2026-05/06 (mid-year exam prep, manual chat-based cycles)",
+  "artefacts": {
+    "inputs": "PENDING — architect to drop scope/workbook photos + exam booklet extract",
+    "answers": "PENDING — architect to drop completed-paper photos + transcribe to Submission JSON",
+    "marks": "PENDING — architect to drop historical per-question mark decisions",
+    "expected": "GENERATED in Week 1 from inputs, then frozen"
+  },
+  "status": "artefacts_pending",
+  "subject": "Music Appreciation",
+  "structure": "60-minute paper. Theory: note values (semibreve/minim/crotchet/quaver), rest values, time signatures (2/4, 3/4, 4/4), treble & bass clef notes (FACE / EGBDF / ACEG / GBDFA), accidentals. History: RnB, Rock, Classical.",
+  "baseline": {
+    "variant_A_total": null,
+    "note": "Totals not recorded in project history — take from marks/ artefacts"
+  },
+  "known_gaps": [
+    {
+      "gap_id": "table_misread_as_mcq",
+      "category": "format_misread",
+      "description": "Table-format questions answered as multiple choice — high mark cost"
+    },
+    {
+      "gap_id": "accidentals_terms",
+      "category": "concept_gap",
+      "description": "Sharp/flat/natural terminology not known"
+    },
+    {
+      "gap_id": "note_value_beats",
+      "category": "concept_gap",
+      "description": "Note value beat counts incorrect"
+    },
+    {
+      "gap_id": "stave_drawing",
+      "category": "concept_gap",
+      "description": "Stave-drawing tasks expected in real exams — render_hints must support stave SVG"
+    }
+  ],
+  "tolerance": {
+    "total_marks": 3.0,
+    "closed_agreement": 0.9
+  }
+}

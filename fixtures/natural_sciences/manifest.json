@@ -1,0 +1,53 @@
+{
+  "grade_label": "Grade 5",
+  "curriculum": "IEB CAPS",
+  "school": "Reddam House Waterfall",
+  "content_language": "en",
+  "cycle_period": "2026-05/06 (mid-year exam prep, manual chat-based cycles)",
+  "artefacts": {
+    "inputs": "PENDING — architect to drop scope/workbook photos + exam booklet extract",
+    "answers": "PENDING — architect to drop completed-paper photos + transcribe to Submission JSON",
+    "marks": "PENDING — architect to drop historical per-question mark decisions",
+    "expected": "GENERATED in Week 1 from inputs, then frozen"
+  },
+  "status": "artefacts_pending",
+  "subject": "Natural Sciences",
+  "structure": "100 marks + 5 bonus, 10 sections A–J: MCQ; True/False with corrections; Match Columns; Crossword; Fill-in-Blanks; Odd One Out; Compare (tables); Ranking/Ordering; Diagrams & Labelling; Higher-Order Thinking.",
+  "baseline": {
+    "variant_A_total": 34,
+    "variant_B_total": 34,
+    "composition_shift": "Ranking 2/10→6/10; MCQ 2/10→4/10; pollination-agent sorting perfect in B; Higher-Order stuck at 2/10",
+    "note": "ONLY fixture with both variants completed — tests the full A→B cycle comparison"
+  },
+  "known_gaps": [
+    {
+      "gap_id": "comparison_table_format",
+      "category": "format_misread",
+      "description": "Comparison table structure misunderstood; IDENTICAL structural error repeated in both variants — basis for the schema's format_example_row default"
+    },
+    {
+      "gap_id": "fill_blank_word_placement",
+      "category": "format_misread",
+      "description": "Correct vocabulary placed in wrong slots (placement, not knowledge)"
+    },
+    {
+      "gap_id": "labelling_positions",
+      "category": "format_misread",
+      "description": "Knows all terms; maps them to wrong numbered positions on diagrams"
+    },
+    {
+      "gap_id": "higher_order_structure",
+      "category": "concept_gap",
+      "description": "Higher-order answers lack reasoning structure (opinion instead of scientific category)"
+    },
+    {
+      "gap_id": "terminology_pairs",
+      "category": "concept_gap",
+      "description": "Confused pairs: malleable/ductile, chlorophyll/glucose, germination/photosynthesis, anther/petal"
+    }
+  ],
+  "tolerance": {
+    "total_marks": 3.0,
+    "closed_agreement": 0.9
+  }
+}
