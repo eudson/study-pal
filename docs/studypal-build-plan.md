@@ -9,10 +9,10 @@
 
 ## Week 1 — Foundations + Generation Schema v1
 **Goal: scope in → valid structured assessment out, via API.**
-- Monorepo scaffold: `api/` (FastAPI) + `web/` (Vite React TS), docker-compose, reverse proxy
+- ✅ (2026-07-11, BOOTSTRAP) Monorepo scaffold: `api/` (FastAPI) + `web/` (Vite React TS), docker-compose. *(Reverse proxy deferred — dev uses Vite's proxy; single-container reverse proxy lands with deploy.)*
 - Supabase project: schema as plain SQL migration files from commit one; RLS multi-tenant model; Auth (Google Sign-In) wired into the SPA shell; own SMTP configured
 - Pydantic assessment schema v1: sections, question types, answerSchema, markRules, contentLanguage, renderHints
-- Generation endpoint calling Claude; prompt v1; OpenAPI → generated TS client pipeline
+- Generation endpoint calling Claude; prompt v1; ✅ (2026-07-11, BOOTSTRAP) OpenAPI → generated TS client pipeline. *(Generation/Claude call + prompt v1 deferred; the FastAPI OpenAPI → `@hey-api/openapi-ts` → `web/src/api/` pipeline is live via `make codegen`, with a `POST /assessments/validate` endpoint wiring up `assessment_schema.py`.)*
 - Harden against 2 fixtures: **Maths** (calculation/working/method marks) + **Afrikaans** (non-English content language) — the two hardest schema stressors
 - ✅ Milestone: POST scope photos → schema-valid Variant A JSON + memo JSON, both fixtures passing in CI
 

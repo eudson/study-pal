@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  api:
+    name: api — lint + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - name: Install Python 3.12
+        run: uv python install 3.12
+      - name: Sync deps
+        run: uv sync --frozen
+      - name: Ruff (lint + format)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Mypy
+        run: uv run mypy .
+      - name: Pytest
+        run: uv run pytest
+
+  web:
+    name: web — lint + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Lint
+        run: pnpm run lint
+      - name: Build
+        run: pnpm run build
+
+  codegen-drift:
+    name: codegen — no drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - name: Install Python 3.12
+        run: uv python install 3.12
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install api deps
+        run: cd api && uv sync --frozen
+      - name: Install web deps
+        run: cd web && pnpm install --frozen-lockfile
+      - name: Regenerate client
+        run: make codegen
+      - name: Fail on drift
+        run: git diff --exit-code web/src/api

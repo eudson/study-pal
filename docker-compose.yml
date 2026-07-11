@@ -1,0 +1,27 @@
+services:
+  api:
+    build: ./api
+    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app
+    # No env_file, no required secrets — `make dev` runs on a clean checkout.
+
+  web:
+    build: ./web
+    command: pnpm run dev -- --host 0.0.0.0 --port 5173
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    environment:
+      # Browser talks to the API through the Vite dev proxy (same-origin),
+      # so this default keeps browser requests relative. Optional override only.
+      VITE_API_BASE_URL: ""
+      # The dev proxy itself runs inside the web container and reaches the API
+      # over the compose network (localhost:8000 when running pnpm dev directly).
+      API_PROXY_TARGET: "http://api:8000"
+    depends_on:
+      - api

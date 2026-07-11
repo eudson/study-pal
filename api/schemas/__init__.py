@@ -1,0 +1,1 @@
+"""StudyPal schemas package."""
