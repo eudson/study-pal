@@ -16,10 +16,11 @@ Design rules encoded here:
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 SCHEMA_VERSION = "1.0"
 
@@ -94,6 +95,16 @@ class McqAnswer(BaseModel):
     def _index_in_range(self) -> "McqAnswer":
         if self.correct_index >= len(self.options):
             raise ValueError("correct_index out of range")
+        return self
+
+    @model_validator(mode="after")
+    def _distractor_notes_keys_valid(self) -> "McqAnswer":
+        n = len(self.options)
+        bad = [k for k in self.distractor_notes if k < 0 or k >= n]
+        if bad:
+            raise ValueError(
+                f"distractor_notes keys {bad} are out of range for {n} options"
+            )
         return self
 
 
@@ -262,7 +273,7 @@ class MarkRules(BaseModel):
     @model_validator(mode="after")
     def _split_sums(self) -> "MarkRules":
         if self.answer_marks is not None and self.method_marks is not None:
-            if self.answer_marks + self.method_marks != self.total:
+            if abs(self.answer_marks + self.method_marks - self.total) > 1e-9:
                 raise ValueError("answer_marks + method_marks must equal total")
         return self
 
@@ -317,6 +328,25 @@ class Question(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _calculation_method_coherence(self) -> "Question":
+        """If method_marks > 0 are declared, the answer must supply method_steps.
+
+        This guards against a memo that allocates method marks with no steps
+        for the marker to tick off — an invariant error in generation output.
+        """
+        if not isinstance(self.answer, CalculationAnswer):
+            return self
+        method_marks = self.mark_rules.method_marks
+        if method_marks is not None and method_marks > 0:
+            if not self.answer.method_steps:
+                raise ValueError(
+                    f"Question {self.qid}: mark_rules.method_marks={method_marks} "
+                    "but answer.method_steps is empty — memo cannot allocate method marks "
+                    "without worked steps"
+                )
+        return self
+
 
 class Section(BaseModel):
     label: str = Field(description='"A", "B", ...')
@@ -332,12 +362,15 @@ class Section(BaseModel):
 
     @model_validator(mode="after")
     def _totals_agree(self) -> "Section":
-        if self.computed_marks != self.declared_marks:
+        if abs(self.computed_marks - self.declared_marks) > 1e-9:
             raise ValueError(
                 f"Section {self.label}: declared {self.declared_marks} "
                 f"!= computed {self.computed_marks}"
             )
         return self
+
+
+_LANGUAGE_CODE_RE = re.compile(r"^[a-z]{2,3}$")
 
 
 class Assessment(BaseModel):
@@ -346,13 +379,29 @@ class Assessment(BaseModel):
     cycle_id: str
     variant: Literal["A", "B"]
     subject: str = Field(description="Freeform; the app never interprets it.")
-    content_language: str = Field(description='ISO 639-1, e.g. "en", "af", "fr", "zu".')
+    content_language: str = Field(description='ISO 639-1/2 lowercase, e.g. "en", "af", "fr", "zu".')
     grade_label: str = Field(description='Freeform, e.g. "Grade 5".')
     title: str
     duration_minutes: int = Field(gt=0)
     instructions: list[str] = Field(default_factory=list)
     declared_total_marks: float = Field(gt=0, multiple_of=0.5)
     sections: list[Section] = Field(min_length=1)
+
+    @field_validator("content_language")
+    @classmethod
+    def _language_code_shape(cls, v: str) -> str:
+        """Accept any lowercase 2-3 letter language code (ISO 639-1 / -2).
+
+        This is a structural check only — it does NOT enumerate valid codes,
+        preserving language-agnosticism.  Rejects obvious typos such as
+        uppercase codes or digits.
+        """
+        if not _LANGUAGE_CODE_RE.match(v):
+            raise ValueError(
+                f"content_language '{v}' must be a lowercase 2- or 3-letter "
+                "language code (e.g. 'en', 'af', 'afr')"
+            )
+        return v
 
     @computed_field
     @property
@@ -361,11 +410,38 @@ class Assessment(BaseModel):
 
     @model_validator(mode="after")
     def _grand_total_agrees(self) -> "Assessment":
-        if self.computed_total_marks != self.declared_total_marks:
+        if abs(self.computed_total_marks - self.declared_total_marks) > 1e-9:
             raise ValueError(
                 f"declared_total_marks {self.declared_total_marks} "
                 f"!= computed {self.computed_total_marks}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _unique_section_labels(self) -> "Assessment":
+        seen: set[str] = set()
+        dupes: list[str] = []
+        for section in self.sections:
+            if section.label in seen:
+                dupes.append(section.label)
+            else:
+                seen.add(section.label)
+        if dupes:
+            raise ValueError(f"Duplicate section labels: {dupes}")
+        return self
+
+    @model_validator(mode="after")
+    def _unique_qids(self) -> "Assessment":
+        seen: set[str] = set()
+        dupes: list[str] = []
+        for section in self.sections:
+            for q in section.questions:
+                if q.qid in seen:
+                    dupes.append(q.qid)
+                else:
+                    seen.add(q.qid)
+        if dupes:
+            raise ValueError(f"Duplicate question ids across assessment: {dupes}")
         return self
 
 
