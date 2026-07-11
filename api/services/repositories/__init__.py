@@ -1,0 +1,1 @@
+"""StudyPal repository package."""

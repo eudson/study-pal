@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 node_modules/
 web/dist/
+api/openapi.json
 .DS_Store
 fixtures/**/inputs/*.jpg
 fixtures/**/inputs/*.png
