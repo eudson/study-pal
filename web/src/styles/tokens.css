@@ -1,0 +1,164 @@
+/* ============================================================
+   StudyPal design tokens — "Sticker & Stamp" identity
+   Locked by architect 2026-07-12. This file is law for all UI.
+   No hardcoded colours/sizes in components — tokens only.
+   Fonts are self-hosted via @fontsource (no Google runtime dep):
+   @fontsource/fredoka + @fontsource/atkinson-hyperlegible
+   ============================================================ */
+
+:root {
+  /* ---------- palette families ---------- */
+  /* paper (canvas & structure) */
+  --paper-0:   #FFFDF9;   /* parent canvas */
+  --paper-100: #FFF9F2;   /* child canvas */
+  --paper-200: #F7EEDF;   /* wells, progress tracks */
+  --paper-300: #E8DDCE;   /* hairlines, card edges */
+  --paper-400: #D6C6AE;   /* dashed borders, disabled edges */
+
+  /* ink (text & outlines) */
+  --ink-900: #29323C;
+  --ink-600: #5A6472;
+  --ink-400: #8A93A0;
+  --ink-warm: #8F7F63;    /* muted captions on paper */
+
+  /* coral (primary action) */
+  --coral-100: #FDE3DA;
+  --coral-500: #F4643C;
+  --coral-600: #C74A28;   /* sticker edge for coral */
+  --coral-700: #9E3517;
+
+  /* teal (success / mastery / selection) */
+  --teal-100: #D9F2EF;
+  --teal-500: #17A398;
+  --teal-600: #0B6B63;
+  --teal-700: #085049;
+
+  /* gold (progress / stars / effort) */
+  --gold-100: #FFF0D4;
+  --gold-500: #FFB020;
+  --gold-600: #B07500;
+  --gold-700: #7A4E00;
+
+  /* plum (growing — never "wrong", never red) */
+  --plum-100: #F3E2F5;
+  --plum-500: #A455B0;
+  --plum-600: #6E3878;
+  --plum-700: #4E2456;
+
+  /* ---------- semantic roles ---------- */
+  --canvas: var(--paper-100);
+  --surface-raised: #FFFFFF;          /* stickers, cards */
+  --surface-well: var(--paper-200);
+  --border-hairline: var(--paper-300);
+
+  --text-primary: var(--ink-900);
+  --text-secondary: var(--ink-600);
+  --text-muted: var(--ink-warm);
+  --text-on-action: #FFFFFF;
+
+  --action: var(--coral-500);
+  --action-edge: var(--coral-600);
+  --action-text: var(--coral-700);
+
+  --success: var(--teal-500);
+  --success-bg: var(--teal-100);
+  --success-text: var(--teal-600);
+
+  --progress: var(--gold-500);
+  --progress-text: var(--gold-600);
+
+  --growing: var(--plum-500);          /* gaps, retry, "let's look again" */
+  --growing-bg: var(--plum-100);
+  --growing-text: var(--plum-600);
+
+  --selected-bg: var(--teal-100);
+  --selected-border: var(--teal-500);
+  --selected-text: var(--teal-600);
+
+  --focus-ring: 3px solid var(--ink-900);
+  --focus-offset: 2px;
+
+  /* ---------- sticker treatment (the signature) ---------- */
+  /* sticker = raised surface + ink outline + thicker bottom edge.
+     pressed = translateY(2px) + edge shrinks to --sticker-edge-pressed */
+  --sticker-border-w: 2px;
+  --sticker-edge-w: 5px;        /* option buttons */
+  --sticker-edge-w-lg: 6px;     /* primary CTA */
+  --sticker-edge-pressed: 2px;
+  --skip-border: 2px dashed var(--paper-400);
+
+  /* ---------- typography ---------- */
+  --font-display: 'Fredoka', 'Comic Sans MS', system-ui, sans-serif;
+  --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+
+  --fs-display: 28px;
+  --fs-h1: 24px;
+  --fs-h2: 20px;
+  --fs-h3: 17px;
+  --fs-body: 16px;
+  --fs-sm: 14px;
+  --fs-caption: 12px;
+
+  --fw-display: 600;    /* Fredoka semibold — headings, buttons, stamps */
+  --fw-display-md: 500;
+  --fw-body: 400;
+  --fw-body-bold: 700;
+
+  --lh-tight: 1.25;
+  --lh-body: 1.6;
+
+  /* ---------- spacing (4px base) ---------- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* ---------- shape ---------- */
+  --r-control: 12px;
+  --r-card: 16px;
+  --r-pill: 999px;
+  /* stamps are circles, border 3px semantic colour, rotate(-8deg) */
+
+  /* ---------- touch & density ---------- */
+  --touch-min: 44px;
+
+  /* ---------- motion ---------- */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-celebrate: 450ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+/* ---------- child mode: bigger, warmer, full sticker energy ---------- */
+[data-mode="child"] {
+  --canvas: var(--paper-100);
+  --fs-body: 17px;
+  --fs-h3: 18px;
+  --touch-min: 48px;
+}
+
+/* ---------- parent mode: same family, calm & dense ---------- */
+[data-mode="parent"] {
+  --canvas: var(--paper-0);
+  --sticker-edge-w: 3px;        /* quieter chunk */
+  --sticker-edge-w-lg: 4px;
+  --fs-body: 15px;
+  --touch-min: 40px;
+  /* no game chrome in parent mode: stars/stamps/streaks render only in
+     child-facing components; parent sees data (marks, confidence, gaps) */
+}
+
+/* ---------- accessibility floor ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-celebrate: 0ms;
+  }
+}
+/* Rules enforced in review, not CSS:
+   - WCAG AA contrast on all text (ink-900/600 on paper surfaces pass;
+     700-stop text on 100-stop fills pass)
+   - never colour-only meaning: pair colour with icon or label
+     (success = tick icon, growing = sprout/refresh icon)
+   - visible focus ring on every interactive element
+   - content in content_language renders verbatim in --font-body,
+     never truncated or restyled */

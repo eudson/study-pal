@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 
+import "@fontsource/fredoka/index.css";
+import "@fontsource/atkinson-hyperlegible/index.css";
+import "./styles/tokens.css";
 import "./lib/apiClient";
 import { AuthProvider } from "./lib/auth";
 import { queryClient } from "./queryClient";
