@@ -1,11 +1,16 @@
 import { useState } from "react";
 
 import { useAuth } from "../lib/auth";
+import { StickerButton } from "./StickerButton";
+import styles from "./SignInScreen.module.css";
 
 /**
  * Unauthenticated landing. StudyPal is parent-gated: only a parent signs in
- * (with Google), and every child-visible step flows from that account. This is
- * the shell — visual design lands once the design tokens are locked.
+ * (with Google), and every child-visible step flows from that account.
+ *
+ * Visual design: "Sticker & Stamp" identity — paper canvas, Fredoka wordmark,
+ * Atkinson tagline, coral StickerButton primary CTA.
+ * All values via design tokens (tokens.css). No hardcoded colours or sizes.
  */
 export function SignInScreen() {
   const { signInWithGoogle } = useAuth();
@@ -25,45 +30,24 @@ export function SignInScreen() {
   };
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "1.25rem",
-        padding: "2rem",
-        textAlign: "center",
-      }}
-    >
-      <div>
-        <h1 style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>StudyPal</h1>
-        <p style={{ color: "#555", maxWidth: "28rem" }}>
+    <main className={styles.canvas}>
+      <div className={styles.brand}>
+        <h1 className={styles.wordmark}>StudyPal</h1>
+        <p className={styles.tagline}>
           Paper-first diagnostic learning, from scope to study pack.
         </p>
       </div>
 
-      <button
-        type="button"
+      <StickerButton
         onClick={() => void onSignIn()}
         disabled={busy}
-        style={{
-          padding: "0.75rem 1.5rem",
-          fontSize: "1rem",
-          borderRadius: "0.5rem",
-          border: "1px solid #ccc",
-          background: "#fff",
-          cursor: busy ? "default" : "pointer",
-          opacity: busy ? 0.6 : 1,
-        }}
+        aria-busy={busy}
       >
         {busy ? "Redirecting…" : "Sign in with Google"}
-      </button>
+      </StickerButton>
 
       {error && (
-        <p role="alert" style={{ color: "#c0392b" }}>
+        <p role="alert" className={styles.error}>
           {error}
         </p>
       )}

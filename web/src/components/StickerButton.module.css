@@ -1,0 +1,66 @@
+/* StickerButton — the signature sticker treatment.
+   All values are tokens. No hardcoded colours, sizes, or fonts. */
+
+.root {
+  /* layout */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch-min);
+  padding: var(--sp-3) var(--sp-6);
+
+  /* sticker surface */
+  background: var(--action);
+  color: var(--text-on-action);
+
+  /* ink outline */
+  border: var(--sticker-border-w) solid var(--coral-700);
+
+  /* thick bottom edge — primary CTA variant */
+  box-shadow:
+    0 var(--sticker-edge-w-lg) 0 0 var(--action-edge);
+
+  border-radius: var(--r-control);
+
+  /* typography */
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-display);
+  line-height: var(--lh-tight);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+
+  cursor: pointer;
+  user-select: none;
+
+  /* motion */
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+/* press / active — sticker pushes in */
+.root:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 var(--sticker-edge-pressed) 0 0 var(--action-edge);
+}
+
+/* hover — subtle lift hint */
+.root:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+/* focus-visible — 3px ink ring, never hidden */
+.root:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* disabled / busy state */
+.root:disabled {
+  opacity: 0.55;
+  cursor: default;
+  /* keep the box-shadow so shape is preserved; translateY stays 0 */
+}
