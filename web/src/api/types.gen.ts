@@ -5,6 +5,215 @@ export type ClientOptions = {
 };
 
 /**
+ * Assessment
+ */
+export type Assessment = {
+    /**
+     * Schema Version
+     */
+    schema_version?: string;
+    /**
+     * Assessment Id
+     */
+    assessment_id: string;
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Variant
+     */
+    variant: 'A' | 'B';
+    /**
+     * Subject
+     *
+     * Freeform; the app never interprets it.
+     */
+    subject: string;
+    /**
+     * Content Language
+     *
+     * ISO 639-1/2 lowercase, e.g. "en", "af", "fr", "zu".
+     */
+    content_language: string;
+    /**
+     * Grade Label
+     *
+     * Freeform, e.g. "Grade 5".
+     */
+    grade_label: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Duration Minutes
+     */
+    duration_minutes: number;
+    /**
+     * Instructions
+     */
+    instructions?: Array<string>;
+    /**
+     * Declared Total Marks
+     */
+    declared_total_marks: number;
+    /**
+     * Sections
+     */
+    sections: Array<Section>;
+    /**
+     * Computed Total Marks
+     */
+    readonly computed_total_marks: number;
+};
+
+/**
+ * Blank
+ */
+export type Blank = {
+    /**
+     * Accepted
+     *
+     * All accepted answers/spellings.
+     */
+    accepted: Array<string>;
+    /**
+     * Value Type
+     */
+    value_type?: 'word' | 'number';
+    /**
+     * Case Sensitive
+     */
+    case_sensitive?: boolean;
+};
+
+/**
+ * CalculationAnswer
+ */
+export type CalculationAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'calculation';
+    /**
+     * Final Answer
+     */
+    final_answer: string;
+    /**
+     * Unit
+     */
+    unit?: string | null;
+    /**
+     * Tolerance
+     *
+     * Numeric tolerance if any.
+     */
+    tolerance?: number | null;
+    /**
+     * Number Sentence
+     *
+     * Full number sentence for the memo (word problems).
+     */
+    number_sentence?: string | null;
+    /**
+     * Method Steps
+     *
+     * Worked steps; basis for method marks.
+     */
+    method_steps?: Array<string>;
+};
+
+/**
+ * Difficulty
+ */
+export type Difficulty = 'easy' | 'medium' | 'challenging';
+
+/**
+ * ExtendedResponseAnswer
+ */
+export type ExtendedResponseAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'extended_response';
+    /**
+     * Model Answer
+     */
+    model_answer: string;
+    /**
+     * Rubric
+     */
+    rubric: Array<RubricPoint>;
+    /**
+     * Required Structure
+     *
+     * e.g. "P.E.E. (Point, Evidence, Explain)".
+     */
+    required_structure?: string | null;
+};
+
+/**
+ * FillBlankAnswer
+ */
+export type FillBlankAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'fill_blank';
+    /**
+     * Blanks
+     */
+    blanks: Array<Blank>;
+};
+
+/**
+ * GenerateAssessmentRequest
+ *
+ * Caller-supplied scope for a new Variant-A assessment.
+ */
+export type GenerateAssessmentRequest = {
+    /**
+     * Cycle Id
+     *
+     * The cycle this assessment belongs to.
+     */
+    cycle_id: string;
+    /**
+     * Scope Text
+     *
+     * Educational scope (topic, grade, curriculum notes). Treated as untrusted.
+     */
+    scope_text: string;
+};
+
+/**
+ * GenerateAssessmentResponse
+ *
+ * Result of a generation call — either a valid assessment or a structured error.
+ */
+export type GenerateAssessmentResponse = {
+    /**
+     * Ok
+     */
+    ok: boolean;
+    assessment?: Assessment | null;
+    /**
+     * Issues
+     */
+    issues?: Array<ValidationIssue>;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
+/**
+ * GradingPath
+ */
+export type GradingPath = 'auto' | 'auto_fuzzy' | 'claude_assist';
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -30,6 +239,387 @@ export type HealthStatus = {
      * Version
      */
     version: string;
+};
+
+/**
+ * LabellingAnswer
+ */
+export type LabellingAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'labelling';
+    /**
+     * Positions
+     *
+     * Position number (as printed on diagram) -> correct term.
+     */
+    positions: {
+        [key: string]: string;
+    };
+    /**
+     * Term Bank
+     *
+     * Optional word bank.
+     */
+    term_bank?: Array<string>;
+    /**
+     * Diagram Asset
+     *
+     * Storage path or asset id of the diagram.
+     */
+    diagram_asset?: string | null;
+};
+
+/**
+ * MarkRules
+ */
+export type MarkRules = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Answer Marks
+     */
+    answer_marks?: number | null;
+    /**
+     * Method Marks
+     */
+    method_marks?: number | null;
+    /**
+     * Tick Allocation
+     *
+     * Memo note, e.g. "1 tick method, 1 tick answer".
+     */
+    tick_allocation?: string | null;
+};
+
+/**
+ * MatchingAnswer
+ */
+export type MatchingAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'matching';
+    /**
+     * Left
+     */
+    left: Array<string>;
+    /**
+     * Right
+     */
+    right: Array<string>;
+    /**
+     * Correct Pairs
+     *
+     * left index -> right index. right may contain distractor extras.
+     */
+    correct_pairs: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * McqAnswer
+ */
+export type McqAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'mcq';
+    /**
+     * Options
+     */
+    options: Array<string>;
+    /**
+     * Correct Index
+     */
+    correct_index: number;
+    /**
+     * Distractor Notes
+     *
+     * Why each wrong option is a plausible common error (memo aid).
+     */
+    distractor_notes?: {
+        [key: string]: string;
+    };
+};
+
+/**
+ * Memo
+ */
+export type Memo = {
+    /**
+     * Worked Solution
+     */
+    worked_solution?: string | null;
+    /**
+     * Marker Tip
+     */
+    marker_tip?: string | null;
+};
+
+/**
+ * OrderingAnswer
+ */
+export type OrderingAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'ordering';
+    /**
+     * Items
+     *
+     * As printed (shuffled).
+     */
+    items: Array<string>;
+    /**
+     * Correct Order
+     *
+     * Indices of `items` in correct sequence.
+     */
+    correct_order: Array<number>;
+};
+
+/**
+ * Question
+ */
+export type Question = {
+    /**
+     * Qid
+     *
+     * Stable unique id, e.g. 'A.3' or a uuid.
+     */
+    qid: string;
+    /**
+     * Number
+     *
+     * As printed: "3", "3.1", "3a".
+     */
+    number: string;
+    /**
+     * Text
+     */
+    text: string;
+    question_type: QuestionType;
+    difficulty: Difficulty;
+    /**
+     * Answer
+     */
+    answer: ({
+        kind: 'mcq';
+    } & McqAnswer) | ({
+        kind: 'true_false';
+    } & TrueFalseAnswer) | ({
+        kind: 'matching';
+    } & MatchingAnswer) | ({
+        kind: 'ordering';
+    } & OrderingAnswer) | ({
+        kind: 'fill_blank';
+    } & FillBlankAnswer) | ({
+        kind: 'short_answer';
+    } & ShortAnswerSpec) | ({
+        kind: 'calculation';
+    } & CalculationAnswer) | ({
+        kind: 'table_completion';
+    } & TableCompletionAnswer) | ({
+        kind: 'labelling';
+    } & LabellingAnswer) | ({
+        kind: 'extended_response';
+    } & ExtendedResponseAnswer);
+    mark_rules: MarkRules;
+    render_hints?: RenderHints;
+    memo?: Memo;
+    /**
+     * Gap Tags
+     *
+     * Gap ids this question deliberately retests (Variant B retargeting).
+     */
+    gap_tags?: Array<string>;
+    readonly grading_path: GradingPath;
+};
+
+/**
+ * QuestionType
+ */
+export type QuestionType = 'mcq' | 'true_false' | 'matching' | 'ordering' | 'fill_blank' | 'short_answer' | 'calculation' | 'table_completion' | 'labelling' | 'extended_response';
+
+/**
+ * RenderHints
+ */
+export type RenderHints = {
+    /**
+     * Working Lines
+     *
+     * Blank working lines to print.
+     */
+    working_lines?: number;
+    /**
+     * Layout
+     *
+     * e.g. "two_column", "table".
+     */
+    layout?: string | null;
+    /**
+     * Diagram Prompt
+     *
+     * Image-generation prompt box if a visual aid is needed (no image gen in MVP).
+     */
+    diagram_prompt?: string | null;
+    /**
+     * Page Break Before
+     */
+    page_break_before?: boolean;
+};
+
+/**
+ * RubricPoint
+ */
+export type RubricPoint = {
+    /**
+     * Point
+     */
+    point: string;
+    /**
+     * Marks
+     */
+    marks: number;
+};
+
+/**
+ * Section
+ */
+export type Section = {
+    /**
+     * Label
+     *
+     * "A", "B", ...
+     */
+    label: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Instructions
+     */
+    instructions?: string | null;
+    /**
+     * Declared Marks
+     */
+    declared_marks: number;
+    /**
+     * Questions
+     */
+    questions: Array<Question>;
+    /**
+     * Computed Marks
+     */
+    readonly computed_marks: number;
+};
+
+/**
+ * ShortAnswerSpec
+ */
+export type ShortAnswerSpec = {
+    /**
+     * Kind
+     */
+    kind?: 'short_answer';
+    /**
+     * Accepted
+     *
+     * Model answers/alternatives.
+     */
+    accepted: Array<string>;
+    /**
+     * Required Keywords
+     */
+    required_keywords?: Array<string>;
+    /**
+     * Marker Guidance
+     */
+    marker_guidance?: string | null;
+};
+
+/**
+ * TableCell
+ */
+export type TableCell = {
+    /**
+     * Row
+     */
+    row: number;
+    /**
+     * Col
+     */
+    col: number;
+    /**
+     * Accepted
+     */
+    accepted: Array<string>;
+    /**
+     * Half Mark
+     *
+     * 0.5 mark per cell if True.
+     */
+    half_mark?: boolean;
+};
+
+/**
+ * TableCompletionAnswer
+ */
+export type TableCompletionAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'table_completion';
+    /**
+     * Row Headers
+     */
+    row_headers: Array<string>;
+    /**
+     * Col Headers
+     */
+    col_headers: Array<string>;
+    /**
+     * Cells
+     *
+     * Only cells the child fills.
+     */
+    cells: Array<TableCell>;
+    /**
+     * Format Example Row
+     *
+     * Render one pre-completed row (discovery: table format misreads).
+     */
+    format_example_row?: boolean;
+};
+
+/**
+ * TrueFalseAnswer
+ */
+export type TrueFalseAnswer = {
+    /**
+     * Kind
+     */
+    kind?: 'true_false';
+    /**
+     * Is True
+     */
+    is_true: boolean;
+    /**
+     * Requires Correction
+     *
+     * If a false statement must be corrected for the second mark.
+     */
+    requires_correction?: boolean;
+    /**
+     * Corrected Statement
+     */
+    corrected_statement?: string | null;
 };
 
 /**
@@ -111,6 +701,172 @@ export type ValidationResult = {
     issues?: Array<ValidationIssue>;
 };
 
+/**
+ * Assessment
+ */
+export type AssessmentWritable = {
+    /**
+     * Schema Version
+     */
+    schema_version?: string;
+    /**
+     * Assessment Id
+     */
+    assessment_id: string;
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Variant
+     */
+    variant: 'A' | 'B';
+    /**
+     * Subject
+     *
+     * Freeform; the app never interprets it.
+     */
+    subject: string;
+    /**
+     * Content Language
+     *
+     * ISO 639-1/2 lowercase, e.g. "en", "af", "fr", "zu".
+     */
+    content_language: string;
+    /**
+     * Grade Label
+     *
+     * Freeform, e.g. "Grade 5".
+     */
+    grade_label: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Duration Minutes
+     */
+    duration_minutes: number;
+    /**
+     * Instructions
+     */
+    instructions?: Array<string>;
+    /**
+     * Declared Total Marks
+     */
+    declared_total_marks: number;
+    /**
+     * Sections
+     */
+    sections: Array<SectionWritable>;
+};
+
+/**
+ * GenerateAssessmentResponse
+ *
+ * Result of a generation call — either a valid assessment or a structured error.
+ */
+export type GenerateAssessmentResponseWritable = {
+    /**
+     * Ok
+     */
+    ok: boolean;
+    assessment?: AssessmentWritable | null;
+    /**
+     * Issues
+     */
+    issues?: Array<ValidationIssue>;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
+/**
+ * Question
+ */
+export type QuestionWritable = {
+    /**
+     * Qid
+     *
+     * Stable unique id, e.g. 'A.3' or a uuid.
+     */
+    qid: string;
+    /**
+     * Number
+     *
+     * As printed: "3", "3.1", "3a".
+     */
+    number: string;
+    /**
+     * Text
+     */
+    text: string;
+    question_type: QuestionType;
+    difficulty: Difficulty;
+    /**
+     * Answer
+     */
+    answer: ({
+        kind: 'mcq';
+    } & McqAnswer) | ({
+        kind: 'true_false';
+    } & TrueFalseAnswer) | ({
+        kind: 'matching';
+    } & MatchingAnswer) | ({
+        kind: 'ordering';
+    } & OrderingAnswer) | ({
+        kind: 'fill_blank';
+    } & FillBlankAnswer) | ({
+        kind: 'short_answer';
+    } & ShortAnswerSpec) | ({
+        kind: 'calculation';
+    } & CalculationAnswer) | ({
+        kind: 'table_completion';
+    } & TableCompletionAnswer) | ({
+        kind: 'labelling';
+    } & LabellingAnswer) | ({
+        kind: 'extended_response';
+    } & ExtendedResponseAnswer);
+    mark_rules: MarkRules;
+    render_hints?: RenderHints;
+    memo?: Memo;
+    /**
+     * Gap Tags
+     *
+     * Gap ids this question deliberately retests (Variant B retargeting).
+     */
+    gap_tags?: Array<string>;
+};
+
+/**
+ * Section
+ */
+export type SectionWritable = {
+    /**
+     * Label
+     *
+     * "A", "B", ...
+     */
+    label: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Instructions
+     */
+    instructions?: string | null;
+    /**
+     * Declared Marks
+     */
+    declared_marks: number;
+    /**
+     * Questions
+     */
+    questions: Array<QuestionWritable>;
+};
+
 export type GetHealthData = {
     body?: never;
     path?: never;
@@ -151,3 +907,28 @@ export type ValidateAssessmentResponses = {
 };
 
 export type ValidateAssessmentResponse = ValidateAssessmentResponses[keyof ValidateAssessmentResponses];
+
+export type GenerateAssessmentData = {
+    body: GenerateAssessmentRequest;
+    path?: never;
+    query?: never;
+    url: '/assessments/generate';
+};
+
+export type GenerateAssessmentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GenerateAssessmentError = GenerateAssessmentErrors[keyof GenerateAssessmentErrors];
+
+export type GenerateAssessmentResponses = {
+    /**
+     * Successful Response
+     */
+    201: GenerateAssessmentResponse;
+};
+
+export type GenerateAssessmentResponse2 = GenerateAssessmentResponses[keyof GenerateAssessmentResponses];

@@ -1,4 +1,18 @@
 services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: studypal
+      POSTGRES_PASSWORD: studypal
+      POSTGRES_DB: studypal
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studypal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build: ./api
     command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
@@ -6,7 +20,12 @@ services:
       - "8000:8000"
     volumes:
       - ./api:/app
-    # No env_file, no required secrets — `make dev` runs on a clean checkout.
+    environment:
+      STUDYPAL_DB_DSN: "postgresql://studypal:studypal@db:5432/studypal"
+      # No secrets required — `make dev` runs on a clean checkout.
+    depends_on:
+      db:
+        condition: service_healthy
 
   web:
     build: ./web

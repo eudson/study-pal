@@ -1,15 +1,38 @@
+"""Pytest configuration and shared fixtures.
+
+The ``client`` fixture overrides ``get_assessment_repository`` with the
+``InMemoryAssessmentRepository`` so unit tests never require a Postgres
+connection.  The RLS tier (test_rls_isolation.py) manages its own
+connections independently and is skipped when Postgres is unreachable.
+"""
+
+from __future__ import annotations
+
 import copy
+from collections.abc import Generator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from dependencies import get_assessment_repository
 from main import app
+from services.repositories.base import AssessmentRepository
+from services.repositories.memory import InMemoryAssessmentRepository
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client() -> Generator[TestClient, None, None]:
+    """TestClient with Postgres dependency overridden by InMemory repo."""
+    repo = InMemoryAssessmentRepository()
+
+    def _override() -> AssessmentRepository:
+        return repo
+
+    app.dependency_overrides[get_assessment_repository] = _override
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.pop(get_assessment_repository, None)
 
 
 def minimal_assessment() -> dict[str, Any]:

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetHealthData, GetHealthResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentResponses, GetHealthData, GetHealthResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -33,6 +33,27 @@ export const getHealth = <ThrowOnError extends boolean = false>(options?: Option
  */
 export const validateAssessment = <ThrowOnError extends boolean = false>(options: Options<ValidateAssessmentData, ThrowOnError>): RequestResult<ValidateAssessmentResponses, ValidateAssessmentErrors, ThrowOnError> => (options.client ?? client).post<ValidateAssessmentResponses, ValidateAssessmentErrors, ThrowOnError>({
     url: '/assessments/validate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Generate
+ *
+ * Generate a schema-valid Variant-A assessment from a scope text.
+ *
+ * - Requires a valid caller identity (``X-User-Id`` header in PR-1).
+ * - Routes output through the single validation gate.
+ * - On success, persists to Postgres under the caller's family tenancy.
+ * - On validation failure after one repair retry, returns a structured error
+ * (HTTP 422 with issues list).
+ */
+export const generateAssessment = <ThrowOnError extends boolean = false>(options: Options<GenerateAssessmentData, ThrowOnError>): RequestResult<GenerateAssessmentResponses, GenerateAssessmentErrors, ThrowOnError> => (options.client ?? client).post<GenerateAssessmentResponses, GenerateAssessmentErrors, ThrowOnError>({
+    security: [{ name: 'x-user-id', type: 'apiKey' }],
+    url: '/assessments/generate',
     ...options,
     headers: {
         'Content-Type': 'application/json',
