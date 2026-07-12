@@ -2,7 +2,9 @@
 # they stay local only. Only transcribed JSON (submissions, mark decisions,
 # manifests) is committed; the CI gates use JSON, not photos.
 
-.env*
+.env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .venv/

@@ -26,12 +26,14 @@ codegen: ## Regenerate web/src/api from FastAPI OpenAPI spec
 	cd web && pnpm run openapi-ts
 
 migrate: ## Apply api/migrations/*.sql in lexical order via the migration/owner role
-	@echo "Applying migrations to $(DB_DSN) ..."
-	@for f in $(sort $(wildcard $(MIGRATIONS_DIR)/*.sql)); do \
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	DSN="$${DB_DSN:-$(DB_DSN)}"; \
+	echo "Applying migrations ..."; \
+	for f in $(sort $(wildcard $(MIGRATIONS_DIR)/*.sql)); do \
 		echo "  --> $$f"; \
-		psql "$(DB_DSN)" -v ON_ERROR_STOP=1 -f "$$f"; \
-	done
-	@echo "Migrations applied."
+		psql "$$DSN" -v ON_ERROR_STOP=1 -f "$$f"; \
+	done; \
+	echo "Migrations applied."
 
 install: ## Install api (uv) and web (pnpm) dependencies locally
 	cd api && uv sync

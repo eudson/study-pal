@@ -20,9 +20,15 @@ services:
       - "8000:8000"
     volumes:
       - ./api:/app
+    # Optional: picks up .env when present (e.g. STUDYPAL_ANTHROPIC_API_KEY);
+    # required:false keeps `make dev` working on a clean checkout with no .env.
+    env_file:
+      - path: .env
+        required: false
     environment:
+      # Explicit → wins over .env, so `make dev` always uses the local db and
+      # never accidentally points the dev stack at real Supabase.
       STUDYPAL_DB_DSN: "postgresql://studypal:studypal@db:5432/studypal"
-      # No secrets required — `make dev` runs on a clean checkout.
     depends_on:
       db:
         condition: service_healthy
