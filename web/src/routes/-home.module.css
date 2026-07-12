@@ -1,0 +1,233 @@
+/* Home screen — p2 (empty) and p2b (active) */
+/* All values via tokens. No hardcoded colours/sizes/fonts. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  /* Use exact viewport height so flex:1 spacer distributes within the viewport
+     and the bottom CTA is never pushed below the fold. overflow-y:auto handles
+     the rare case where content (e.g. many cycles) genuinely exceeds screen height. */
+  height: 100dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: var(--sp-5) var(--sp-5) var(--sp-6);
+  background: var(--canvas);
+  gap: var(--sp-4);
+}
+
+.loadingShell {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+
+.headerWelcome {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.headerName {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h1);
+  color: var(--text-primary);
+}
+
+.avatarBtn {
+  appearance: none;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: 50%;
+  background: var(--surface-well);
+  border: 1.5px solid var(--border-hairline);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease-out);
+}
+
+.avatarBtn:hover {
+  filter: brightness(0.95);
+}
+
+.avatarBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Empty state */
+.emptyState {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--sp-5);
+}
+
+.emptyIllustration {
+  width: 150px;
+  height: 120px;
+  border-radius: var(--r-card);
+  border: 2px dashed var(--paper-400);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--paper-100),
+    var(--paper-100) 9px,
+    var(--paper-200) 9px,
+    var(--paper-200) 18px
+  );
+  display: grid;
+  place-items: center;
+}
+
+.emptyIllustrationLabel {
+  font-family: var(--font-display);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+
+.emptyHeading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+}
+
+.emptyBody {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+  line-height: var(--lh-body);
+  max-width: 260px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Active cycles list */
+.sectionLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.cycleList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.cycleCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border-hairline);
+  border-bottom-width: var(--sticker-edge-w);
+  border-radius: var(--r-card);
+  padding: var(--sp-4);
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease-out);
+}
+
+.cycleCard:hover {
+  filter: brightness(0.98);
+}
+
+.cycleCard:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.cycleCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cycleCardTitle {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  color: var(--text-primary);
+}
+
+.cycleCardMeta {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+/* Progress bar */
+.progressBar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.progressSegment {
+  flex: 1;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--paper-300);
+  transition: background var(--dur-base) var(--ease-out);
+}
+
+.progressSegmentFilled {
+  background: var(--teal-500);
+}
+
+.progressSegmentActive {
+  background: var(--gold-500);
+}
+
+.progressLabels {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+
+/* Shared */
+.spacer {
+  flex: 1;
+}
+
+.ctaFull {
+  width: 100%;
+}
+
+/* Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 4px solid var(--paper-300);
+  border-top-color: var(--coral-500);
+  animation: spin 800ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--paper-300);
+    opacity: 0.6;
+  }
+}

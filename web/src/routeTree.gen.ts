@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as CyclesNewRouteImport } from './routes/cycles/new'
+import { Route as CyclesCycleIdRouteImport } from './routes/cycles/$cycleId'
+import { Route as SettingsChildrenNewRouteImport } from './routes/settings/children/new'
+import { Route as SettingsChildrenChildIdRouteImport } from './routes/settings/children/$childId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CyclesNewRoute = CyclesNewRouteImport.update({
+  id: '/cycles/new',
+  path: '/cycles/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CyclesCycleIdRoute = CyclesCycleIdRouteImport.update({
+  id: '/cycles/$cycleId',
+  path: '/cycles/$cycleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsChildrenNewRoute = SettingsChildrenNewRouteImport.update({
+  id: '/settings/children/new',
+  path: '/settings/children/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsChildrenChildIdRoute = SettingsChildrenChildIdRouteImport.update({
+  id: '/settings/children/$childId',
+  path: '/settings/children/$childId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cycles/$cycleId': typeof CyclesCycleIdRoute
+  '/cycles/new': typeof CyclesNewRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
+  '/settings/children/new': typeof SettingsChildrenNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cycles/$cycleId': typeof CyclesCycleIdRoute
+  '/cycles/new': typeof CyclesNewRoute
+  '/settings': typeof SettingsIndexRoute
+  '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
+  '/settings/children/new': typeof SettingsChildrenNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cycles/$cycleId': typeof CyclesCycleIdRoute
+  '/cycles/new': typeof CyclesNewRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
+  '/settings/children/new': typeof SettingsChildrenNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/cycles/$cycleId'
+    | '/cycles/new'
+    | '/settings/'
+    | '/settings/children/$childId'
+    | '/settings/children/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/cycles/$cycleId'
+    | '/cycles/new'
+    | '/settings'
+    | '/settings/children/$childId'
+    | '/settings/children/new'
+  id:
+    | '__root__'
+    | '/'
+    | '/cycles/$cycleId'
+    | '/cycles/new'
+    | '/settings/'
+    | '/settings/children/$childId'
+    | '/settings/children/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CyclesCycleIdRoute: typeof CyclesCycleIdRoute
+  CyclesNewRoute: typeof CyclesNewRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+  SettingsChildrenChildIdRoute: typeof SettingsChildrenChildIdRoute
+  SettingsChildrenNewRoute: typeof SettingsChildrenNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cycles/new': {
+      id: '/cycles/new'
+      path: '/cycles/new'
+      fullPath: '/cycles/new'
+      preLoaderRoute: typeof CyclesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cycles/$cycleId': {
+      id: '/cycles/$cycleId'
+      path: '/cycles/$cycleId'
+      fullPath: '/cycles/$cycleId'
+      preLoaderRoute: typeof CyclesCycleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/children/new': {
+      id: '/settings/children/new'
+      path: '/settings/children/new'
+      fullPath: '/settings/children/new'
+      preLoaderRoute: typeof SettingsChildrenNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/children/$childId': {
+      id: '/settings/children/$childId'
+      path: '/settings/children/$childId'
+      fullPath: '/settings/children/$childId'
+      preLoaderRoute: typeof SettingsChildrenChildIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CyclesCycleIdRoute: CyclesCycleIdRoute,
+  CyclesNewRoute: CyclesNewRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+  SettingsChildrenChildIdRoute: SettingsChildrenChildIdRoute,
+  SettingsChildrenNewRoute: SettingsChildrenNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

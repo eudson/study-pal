@@ -36,14 +36,12 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      "/health": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-      },
-      "/assessments": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-      },
+      "/health": { target: apiProxyTarget, changeOrigin: true },
+      "/assessments": { target: apiProxyTarget, changeOrigin: true },
+      "/families": { target: apiProxyTarget, changeOrigin: true },
+      "/children": { target: apiProxyTarget, changeOrigin: true },
+      "/subjects": { target: apiProxyTarget, changeOrigin: true },
+      "/cycles": { target: apiProxyTarget, changeOrigin: true },
     },
   },
 });

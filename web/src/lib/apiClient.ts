@@ -17,3 +17,17 @@ client.setConfig({
     return data.session?.access_token;
   },
 });
+
+// Request interceptor: inject X-User-Id on every request.
+// In stub-auth mode the backend resolves identity from this header.
+// In JWKS mode (prod) the header value equals the JWT `sub`, so it is
+// redundant but harmless — the server validates the Bearer token and ignores
+// the header.
+client.interceptors.request.use(async (request) => {
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id;
+  if (userId) {
+    request.headers.set("X-User-Id", userId);
+  }
+  return request;
+});

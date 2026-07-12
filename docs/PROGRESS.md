@@ -131,3 +131,71 @@ session took PR-2 from "db is wired" to real tenant isolation + real auth.
 - Enabling JWKS locally is a deploy step: `.env` is intentionally left in stub
   mode (setting the JWKS vars flips get_settings into JWKS mode and would break
   the stub tests).
+
+---
+
+## 2026-07-12 — Parent view: scope→draft→approve + Settings/Family
+
+Orchestrator-driven; `api/` by the backend agent, `web/` by the frontend +
+uiux agents, verification + wiring by the orchestrator. Runs against
+**FakeClaude** (live generation C4 still deferred). Local stack in **stub auth**.
+
+**What shipped**
+- **Spine CRUD + cycle state machine (`api/`).** RLS-scoped, Pydantic-modelled
+  repos/routers for family → child → subject → cycle (previously only
+  `/assessments` existed). `api/services/cycle.py` state machine — transitions
+  only via service fns (ARCHITECTURE §5); this slice drives
+  `SCOPE_UPLOADED → GENERATING_A → PARENT_REVIEWS_DRAFT → APPROVED_PRINTED`, the
+  approve transition records `parent_approval_at` (rule 8). Endpoints: bootstrap
+  `POST /families` + list; children/subjects/cycles CRUD;
+  `POST /cycles/{id}/generate` (wires FakeClaude + advances state);
+  `POST /cycles/{id}/approve`; `PATCH /children/{id}`;
+  `POST /children/{id}/archive`.
+- **Onboarding bootstrap.** New users hit an RLS bootstrap deadlock
+  (`families_tenant_insert` needs prior membership; `family_members` has no
+  INSERT policy). Solved with a `SECURITY DEFINER` `app_bootstrap_family(...)`
+  (migration 0003) — elevated privilege lives in the DB function, never on the
+  request path (§10 R1). Stub header relaxed to accept `<user_id>` alone.
+- **Per-child settings.** `children.archived_at` + `visibility_defaults` jsonb
+  (migration 0005); `list_children` excludes archived. Visibility defaults
+  **persist but are not yet consumed** — the Publish gate that reads them is the
+  next slice (architect decision, 2026-07-12).
+- **Parent UI (`web/`, `data-mode="parent"`).** Home (empty/active), New cycle
+  (child + freeform subject + language, no `if subject==`), text-first scope,
+  Generating, Draft preview + **Approve/PublishGate**, No-printer screen view.
+  Settings/Family: family list, Account (sign-out moved here), child profile
+  (edit name/grade, visibility toggles, archive-with-confirm `Dialog`), add
+  child. Shared primitives: `StickerButton`, `Chip`, `Dialog`. Avatar now opens
+  `/settings` (fixed an accidental-sign-out bug). Design ported from the locked
+  Sticker & Stamp tokens; baseline reset extracted to `base.css` so `tokens.css`
+  stays pure tokens (shadow + backdrop-overlay tokens added deliberately).
+- **Migrations 0003–0005** applied to the live eu-west-1 project.
+
+**Bugs found & fixed during live testing**
+- `SET LOCAL request.jwt.claims` was cleared on COMMIT, breaking any
+  multi-transaction flow (generate does two transitions) → switched to
+  session-scoped `set_config(..., false)`; DB-tier regression tests added.
+- Child mutations relied on refetch-after-navigate (flaky, list lagged) →
+  all four now write the result into the `["children"]` cache directly.
+- `CycleResponse.assessments` was raw JSONB → typed as `list[Assessment]`;
+  frontend cast removed.
+
+**Verification**
+- `make lint` — clean (ruff + `ruff format --check` + mypy strict; tsc + eslint).
+- `make test` — 146 passed, 33 DB-tier skipped (no local Docker DB), 2
+  fixture-gate deselected. Fixtures untouched (E1 pending-artefacts gate still
+  intentionally red).
+- `make codegen` — regenerated, idempotent (zero drift).
+- **Live end-to-end smoke** on the real eu-west-1 DB (stub auth): bootstrap →
+  child → subject → cycle → generate → `PARENT_REVIEWS_DRAFT` → approve →
+  `APPROVED_PRINTED`; child edit → archive → list-excludes-archived. All green.
+
+**What's next / deferred**
+- **Publish gate + child-visibility (next slice)** — parent Mark review /
+  Publish gate (design p9) + child results view that reads `visibility_defaults`
+  (ARCHITECTURE §5, rule 8). This makes the persisted toggles functional.
+- **Supabase Storage** scope upload (photo/PDF) — text-first for now.
+- **Live generation (C4)** — still deferred pending architect discussion.
+- **Fixtures (E1)** — transcribe artefacts, flip the replay gate on.
+- **Design export** `docs/desing/StudyPal Journeys.html` left untracked
+  (misspelled dir; large asset) — rename to `docs/design/` + commit if wanted.

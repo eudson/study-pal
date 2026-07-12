@@ -89,6 +89,19 @@ export type Blank = {
 };
 
 /**
+ * BootstrapResponse
+ *
+ * Response from POST /families (bootstrap).
+ */
+export type BootstrapResponse = {
+    family: FamilyResponse;
+    /**
+     * Child Id
+     */
+    child_id?: string | null;
+};
+
+/**
  * CalculationAnswer
  */
 export type CalculationAnswer = {
@@ -125,6 +138,158 @@ export type CalculationAnswer = {
 };
 
 /**
+ * ChildCreate
+ *
+ * Create a child.  family_id is derived server-side; never from the client.
+ */
+export type ChildCreate = {
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Grade Label
+     */
+    grade_label: string;
+    /**
+     * Initial publish-gate toggle defaults; uses standard defaults when omitted.
+     */
+    visibility_defaults?: VisibilityDefaults;
+};
+
+/**
+ * ChildResponse
+ */
+export type ChildResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Family Id
+     */
+    family_id: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Grade Label
+     */
+    grade_label: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Archived At
+     */
+    archived_at?: string | null;
+    visibility_defaults?: VisibilityDefaults;
+};
+
+/**
+ * ChildUpdate
+ *
+ * PATCH payload for child profile (all fields optional — partial update semantics).
+ */
+export type ChildUpdate = {
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Grade Label
+     */
+    grade_label?: string | null;
+    visibility_defaults?: VisibilityDefaults | null;
+};
+
+/**
+ * CycleApprove
+ *
+ * Parent approval payload for POST /cycles/{id}/approve.
+ */
+export type CycleApprove = {
+    /**
+     * Note
+     *
+     * Optional parent note recorded with the approval timestamp.
+     */
+    note?: string | null;
+};
+
+/**
+ * CycleCreate
+ *
+ * Create a cycle.  family_id is derived server-side.
+ *
+ * ``scope_text`` is the text-first scope intake (no Storage upload this slice).
+ */
+export type CycleCreate = {
+    /**
+     * Subject Id
+     */
+    subject_id: string;
+    /**
+     * Scope Text
+     *
+     * Educational scope text.  Text-first intake (no file upload this slice).
+     */
+    scope_text: string;
+};
+
+/**
+ * CycleResponse
+ */
+export type CycleResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Family Id
+     */
+    family_id: string;
+    /**
+     * Subject Id
+     */
+    subject_id: string;
+    state: CycleState;
+    /**
+     * Scope Text
+     */
+    scope_text?: string | null;
+    /**
+     * Parent Approval At
+     */
+    parent_approval_at?: string | null;
+    /**
+     * Parent Approval Note
+     */
+    parent_approval_note?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Assessments
+     *
+     * Assessment document(s) for this cycle; populated on detail endpoint, empty on list views.
+     */
+    assessments?: Array<Assessment>;
+};
+
+/**
+ * CycleState
+ */
+export type CycleState = 'SCOPE_UPLOADED' | 'GENERATING_A' | 'PARENT_REVIEWS_DRAFT' | 'APPROVED_PRINTED' | 'ANSWERS_ENTERED' | 'AUTO_MARKED' | 'PARENT_REVIEW_MARKS' | 'GAP_REPORT' | 'GENERATING_STUDY_PACK' | 'STUDY_PACK_DONE' | 'GENERATING_B' | 'CYCLE_COMPLETE';
+
+/**
  * Difficulty
  */
 export type Difficulty = 'easy' | 'medium' | 'challenging';
@@ -151,6 +316,49 @@ export type ExtendedResponseAnswer = {
      * e.g. "P.E.E. (Point, Evidence, Explain)".
      */
     required_structure?: string | null;
+};
+
+/**
+ * FamilyCreate
+ *
+ * Bootstrap request — creates a family + the caller's membership row.
+ *
+ * Optionally creates the first child in the same transaction.
+ * child_name and grade_label must both be provided or both omitted.
+ */
+export type FamilyCreate = {
+    /**
+     * Family Name
+     *
+     * Display name for the family.
+     */
+    family_name: string;
+    /**
+     * Child Name
+     */
+    child_name?: string | null;
+    /**
+     * Grade Label
+     */
+    grade_label?: string | null;
+};
+
+/**
+ * FamilyResponse
+ */
+export type FamilyResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Created At
+     */
+    created_at: string;
 };
 
 /**
@@ -545,6 +753,61 @@ export type ShortAnswerSpec = {
 };
 
 /**
+ * SubjectCreate
+ *
+ * Create a subject.  family_id is derived server-side.
+ *
+ * ``name`` is freeform (ARCHITECTURE golden rule 4: no subject == branches).
+ * ``content_language`` drives generation/grading language (ISO 639-1/2 lowercase).
+ */
+export type SubjectCreate = {
+    /**
+     * Child Id
+     */
+    child_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Content Language
+     *
+     * ISO 639-1/2 lowercase, e.g. 'en', 'af'.
+     */
+    content_language: string;
+};
+
+/**
+ * SubjectResponse
+ */
+export type SubjectResponse = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Family Id
+     */
+    family_id: string;
+    /**
+     * Child Id
+     */
+    child_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Content Language
+     */
+    content_language: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
  * TableCell
  */
 export type TableCell = {
@@ -702,6 +965,35 @@ export type ValidationResult = {
 };
 
 /**
+ * VisibilityDefaults
+ *
+ * Per-child toggle defaults for the publish gate (Settings p13).
+ *
+ * Stored as JSONB in children.visibility_defaults.
+ * Not yet consumed by any downstream gate — modelled plainly, no coupling.
+ *
+ * Design defaults (p13): accuracy/effort/growing ON, ai_rationale OFF.
+ */
+export type VisibilityDefaults = {
+    /**
+     * Accuracy
+     */
+    accuracy?: boolean;
+    /**
+     * Effort
+     */
+    effort?: boolean;
+    /**
+     * Growing
+     */
+    growing?: boolean;
+    /**
+     * Ai Rationale
+     */
+    ai_rationale?: boolean;
+};
+
+/**
  * Assessment
  */
 export type AssessmentWritable = {
@@ -759,6 +1051,51 @@ export type AssessmentWritable = {
      * Sections
      */
     sections: Array<SectionWritable>;
+};
+
+/**
+ * CycleResponse
+ */
+export type CycleResponseWritable = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Family Id
+     */
+    family_id: string;
+    /**
+     * Subject Id
+     */
+    subject_id: string;
+    state: CycleState;
+    /**
+     * Scope Text
+     */
+    scope_text?: string | null;
+    /**
+     * Parent Approval At
+     */
+    parent_approval_at?: string | null;
+    /**
+     * Parent Approval Note
+     */
+    parent_approval_note?: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Assessments
+     *
+     * Assessment document(s) for this cycle; populated on detail endpoint, empty on list views.
+     */
+    assessments?: Array<AssessmentWritable>;
 };
 
 /**
@@ -932,3 +1269,325 @@ export type GenerateAssessmentResponses = {
 };
 
 export type GenerateAssessmentResponse2 = GenerateAssessmentResponses[keyof GenerateAssessmentResponses];
+
+export type ListFamiliesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/families';
+};
+
+export type ListFamiliesResponses = {
+    /**
+     * Response List Families
+     *
+     * Successful Response
+     */
+    200: Array<FamilyResponse>;
+};
+
+export type ListFamiliesResponse = ListFamiliesResponses[keyof ListFamiliesResponses];
+
+export type BootstrapFamilyData = {
+    body: FamilyCreate;
+    path?: never;
+    query?: never;
+    url: '/families';
+};
+
+export type BootstrapFamilyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type BootstrapFamilyError = BootstrapFamilyErrors[keyof BootstrapFamilyErrors];
+
+export type BootstrapFamilyResponses = {
+    /**
+     * Successful Response
+     */
+    201: BootstrapResponse;
+};
+
+export type BootstrapFamilyResponse = BootstrapFamilyResponses[keyof BootstrapFamilyResponses];
+
+export type ListChildrenData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/children';
+};
+
+export type ListChildrenResponses = {
+    /**
+     * Response List Children
+     *
+     * Successful Response
+     */
+    200: Array<ChildResponse>;
+};
+
+export type ListChildrenResponse = ListChildrenResponses[keyof ListChildrenResponses];
+
+export type CreateChildData = {
+    body: ChildCreate;
+    path?: never;
+    query?: never;
+    url: '/children';
+};
+
+export type CreateChildErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateChildError = CreateChildErrors[keyof CreateChildErrors];
+
+export type CreateChildResponses = {
+    /**
+     * Successful Response
+     */
+    201: ChildResponse;
+};
+
+export type CreateChildResponse = CreateChildResponses[keyof CreateChildResponses];
+
+export type UpdateChildData = {
+    body: ChildUpdate;
+    path: {
+        /**
+         * Child Id
+         */
+        child_id: string;
+    };
+    query?: never;
+    url: '/children/{child_id}';
+};
+
+export type UpdateChildErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateChildError = UpdateChildErrors[keyof UpdateChildErrors];
+
+export type UpdateChildResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChildResponse;
+};
+
+export type UpdateChildResponse = UpdateChildResponses[keyof UpdateChildResponses];
+
+export type ArchiveChildData = {
+    body?: never;
+    path: {
+        /**
+         * Child Id
+         */
+        child_id: string;
+    };
+    query?: never;
+    url: '/children/{child_id}/archive';
+};
+
+export type ArchiveChildErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ArchiveChildError = ArchiveChildErrors[keyof ArchiveChildErrors];
+
+export type ArchiveChildResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChildResponse;
+};
+
+export type ArchiveChildResponse = ArchiveChildResponses[keyof ArchiveChildResponses];
+
+export type ListSubjectsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/subjects';
+};
+
+export type ListSubjectsResponses = {
+    /**
+     * Response List Subjects
+     *
+     * Successful Response
+     */
+    200: Array<SubjectResponse>;
+};
+
+export type ListSubjectsResponse = ListSubjectsResponses[keyof ListSubjectsResponses];
+
+export type CreateSubjectData = {
+    body: SubjectCreate;
+    path?: never;
+    query?: never;
+    url: '/subjects';
+};
+
+export type CreateSubjectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateSubjectError = CreateSubjectErrors[keyof CreateSubjectErrors];
+
+export type CreateSubjectResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubjectResponse;
+};
+
+export type CreateSubjectResponse = CreateSubjectResponses[keyof CreateSubjectResponses];
+
+export type ListCyclesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cycles';
+};
+
+export type ListCyclesResponses = {
+    /**
+     * Response List Cycles
+     *
+     * Successful Response
+     */
+    200: Array<CycleResponse>;
+};
+
+export type ListCyclesResponse = ListCyclesResponses[keyof ListCyclesResponses];
+
+export type CreateCycleData = {
+    body: CycleCreate;
+    path?: never;
+    query?: never;
+    url: '/cycles';
+};
+
+export type CreateCycleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateCycleError = CreateCycleErrors[keyof CreateCycleErrors];
+
+export type CreateCycleResponses = {
+    /**
+     * Successful Response
+     */
+    201: CycleResponse;
+};
+
+export type CreateCycleResponse = CreateCycleResponses[keyof CreateCycleResponses];
+
+export type GetCycleData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}';
+};
+
+export type GetCycleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCycleError = GetCycleErrors[keyof GetCycleErrors];
+
+export type GetCycleResponses = {
+    /**
+     * Successful Response
+     */
+    200: CycleResponse;
+};
+
+export type GetCycleResponse = GetCycleResponses[keyof GetCycleResponses];
+
+export type GenerateAssessmentForCycleData = {
+    body: GenerateAssessmentRequest;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/generate';
+};
+
+export type GenerateAssessmentForCycleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GenerateAssessmentForCycleError = GenerateAssessmentForCycleErrors[keyof GenerateAssessmentForCycleErrors];
+
+export type GenerateAssessmentForCycleResponses = {
+    /**
+     * Successful Response
+     */
+    201: GenerateAssessmentResponse;
+};
+
+export type GenerateAssessmentForCycleResponse = GenerateAssessmentForCycleResponses[keyof GenerateAssessmentForCycleResponses];
+
+export type ApproveCycleDraftData = {
+    body: CycleApprove;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/approve';
+};
+
+export type ApproveCycleDraftErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ApproveCycleDraftError = ApproveCycleDraftErrors[keyof ApproveCycleDraftErrors];
+
+export type ApproveCycleDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: CycleResponse;
+};
+
+export type ApproveCycleDraftResponse = ApproveCycleDraftResponses[keyof ApproveCycleDraftResponses];

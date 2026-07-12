@@ -1,0 +1,449 @@
+/* New cycle flow — p3 (setup), p4 (scope), p5 (generating) */
+/* All values via tokens. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  /* Exact viewport height: bounds the flex column so the bottom CTA (Next /
+     Generate test) is always on-screen. overflow-y:auto allows scrolling if
+     content is genuinely taller than the viewport (many children, large scope). */
+  height: 100dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: var(--sp-4) var(--sp-5) var(--sp-6);
+  background: var(--canvas);
+  gap: var(--sp-5);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.backBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-1);
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  border-radius: var(--r-control);
+}
+
+.backBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+}
+
+.sectionLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-3);
+}
+
+/* Child chips */
+.chipRow {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.chipBtn {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  border-bottom-width: var(--sticker-edge-w);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.chipBtn:active {
+  transform: translateY(2px);
+  border-bottom-width: var(--sticker-edge-pressed);
+}
+
+.chipBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.chipBtnSelected {
+  color: var(--selected-text);
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+}
+
+.chipBtnSkip {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  background: transparent;
+  border: var(--skip-border);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+}
+
+.chipBtnSkip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Add child form */
+.addChildForm {
+  margin-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--surface-well);
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-card);
+}
+
+.addChildActions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+
+.ghostBtn {
+  appearance: none;
+  background: transparent;
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  padding: var(--sp-2) var(--sp-4);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  min-height: var(--touch-min);
+}
+
+.ghostBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.confirmBtn {
+  appearance: none;
+  background: var(--action);
+  border: var(--sticker-border-w) solid var(--action-edge);
+  border-bottom-width: var(--sticker-edge-w);
+  border-radius: var(--r-control);
+  padding: var(--sp-2) var(--sp-5);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-sm);
+  color: var(--text-on-action);
+  cursor: pointer;
+  min-height: var(--touch-min);
+}
+
+.confirmBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.confirmBtn:active:not(:disabled) {
+  transform: translateY(2px);
+  border-bottom-width: var(--sticker-edge-pressed);
+}
+
+.confirmBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Subject grid */
+.subjectGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+.subjectBtn {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  border-bottom-width: var(--sticker-edge-w);
+  border-radius: var(--r-control);
+  padding: var(--sp-4);
+  min-height: var(--touch-min);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.subjectBtn:active {
+  transform: translateY(2px);
+  border-bottom-width: var(--sticker-edge-pressed);
+}
+
+.subjectBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.subjectBtnSelected {
+  color: var(--selected-text);
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+}
+
+.customSubjectInput {
+  margin-top: var(--sp-3);
+}
+
+/* Text inputs */
+.textInput {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+  outline: none;
+}
+
+.textInput:focus {
+  border-color: var(--ink-900);
+}
+
+.textInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Scope step */
+.bodyCopy {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  margin: 0;
+}
+
+.scopeCard {
+  border: var(--skip-border);
+  border-radius: var(--r-card);
+  background: var(--surface-well);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.scopeLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.scopeTextarea {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: var(--lh-body);
+  outline: none;
+}
+
+.scopeTextarea:focus {
+  border-color: var(--ink-900);
+}
+
+.scopeTextarea:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Error box */
+.errorBox {
+  background: var(--growing-bg);
+  border: 1.5px solid var(--growing);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--growing-text);
+  line-height: var(--lh-body);
+}
+
+/* Spacer */
+.spacer {
+  flex: 1;
+}
+
+.ctaFull {
+  width: 100%;
+}
+
+/* Generating screen (p5) */
+.generatingShell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: var(--sp-5) var(--sp-6) var(--sp-6);
+  background: var(--canvas);
+}
+
+.generatingContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-6);
+  text-align: center;
+}
+
+.spinner {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 5px solid var(--paper-300);
+  border-top-color: var(--coral-500);
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.generatingHeading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+}
+
+.generatingSubtext {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+}
+
+.stepList {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  text-align: left;
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+}
+
+.stepItemMuted {
+  color: var(--ink-400);
+}
+
+.stepDot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.stepDotDone {
+  background: var(--teal-100);
+  color: var(--teal-600);
+  border-color: var(--teal-500);
+}
+
+.stepDotActive {
+  background: var(--gold-100);
+  color: var(--gold-600);
+  border-color: var(--gold-500);
+}
+
+.stepDotPending {
+  background: var(--paper-200);
+  border-color: var(--paper-300);
+  color: var(--ink-400);
+}
+
+.progressTrack {
+  width: 100%;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--paper-200);
+  overflow: hidden;
+}
+
+.progressFill {
+  width: 60%;
+  height: 100%;
+  background: var(--gold-500);
+  border-radius: 99px;
+  animation: progressPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes progressPulse {
+  0%   { width: 40%; }
+  50%  { width: 80%; }
+  100% { width: 40%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--paper-300);
+    opacity: 0.6;
+  }
+
+  .progressFill {
+    animation: none;
+    width: 60%;
+  }
+}

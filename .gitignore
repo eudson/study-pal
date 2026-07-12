@@ -5,6 +5,7 @@
 .env
 .env.*
 !.env.example
+HANDOFF.md
 __pycache__/
 *.pyc
 .venv/
@@ -18,3 +19,4 @@ fixtures/**/inputs/*.pdf
 fixtures/**/answers/*.jpg
 fixtures/**/answers/*.png
 fixtures/**/answers/*.pdf
+.gstack/

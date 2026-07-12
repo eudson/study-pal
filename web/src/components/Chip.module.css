@@ -1,0 +1,37 @@
+/* Chip — shared status pill. All values via tokens. */
+
+.chip {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-caption);
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  border: 1.5px solid;
+  white-space: nowrap;
+  line-height: var(--lh-tight);
+}
+
+.chip--teal {
+  color: var(--teal-600);
+  background: var(--teal-100);
+  border-color: var(--teal-500);
+}
+
+.chip--gold {
+  color: var(--gold-600);
+  background: var(--gold-100);
+  border-color: var(--gold-500);
+}
+
+.chip--plum {
+  color: var(--plum-600);
+  background: var(--plum-100);
+  border-color: var(--plum-500);
+}
+
+.chip--neutral {
+  color: var(--text-secondary);
+  background: var(--surface-well);
+  border-color: var(--border-hairline);
+}

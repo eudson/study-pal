@@ -22,7 +22,8 @@ from services.auth import identity_from_stub_header
 
 
 class TestGetIdentityUnit:
-    def test_valid_header_returns_identity(self) -> None:
+    def test_valid_header_with_family_returns_identity(self) -> None:
+        """``<user_id>/<family_id>`` — existing user with a family."""
         user_id = uuid.uuid4()
         family_id = uuid.uuid4()
         header = f"{user_id}/{family_id}"
@@ -30,14 +31,22 @@ class TestGetIdentityUnit:
         assert identity.user_id == user_id
         assert identity.family_id == family_id
 
+    def test_valid_header_user_only_returns_identity(self) -> None:
+        """``<user_id>`` only — new user who has not bootstrapped a family yet."""
+        user_id = uuid.uuid4()
+        identity = identity_from_stub_header(str(user_id), get_settings())
+        assert identity.user_id == user_id
+        assert identity.family_id is None
+
     def test_missing_header_raises_401(self) -> None:
         with pytest.raises(HTTPException) as exc:
             identity_from_stub_header(None, get_settings())
         assert exc.value.status_code == 401
 
-    def test_malformed_header_no_slash_raises_401(self) -> None:
+    def test_malformed_header_no_slash_invalid_uuid_raises_401(self) -> None:
+        """A single segment that is not a valid UUID is rejected."""
         with pytest.raises(HTTPException) as exc:
-            identity_from_stub_header(str(uuid.uuid4()), get_settings())
+            identity_from_stub_header("not-a-uuid", get_settings())
         assert exc.value.status_code == 401
 
     def test_invalid_uuid_raises_401(self) -> None:

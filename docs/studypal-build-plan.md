@@ -19,7 +19,7 @@
 ## Week 2 — PDF Rendering + Scope Intake
 **Goal: upload a scope on your phone, get printable PDFs back.**
 - WeasyPrint HTML/CSS templates: test paper (mark brackets, working space, footer pages) + memorandum (answers bold, method notes, tick allocation) — port the established formatting standards as a template spec
-- Scope intake UI (parent mode): photo/PDF upload to Supabase Storage, subject + child tagging, cycle creation
+- ✅ (2026-07-12, partial) Scope intake UI (parent mode): **text-first** scope + subject/child tagging + cycle creation — plus the spine CRUD (family→child→subject→cycle), the cycle state machine (`api/services/cycle.py`), draft preview + approve/publish gate, and Settings/Family (child edit/archive, per-child visibility defaults persisted). *Supabase Storage photo/PDF upload deferred; runs on FakeClaude.*
 - Harden schema against remaining 3 fixtures (NS tables/labelling, SS matching, Music stave render-hints as SVG)
 - Variant B regeneration logic (same spec, changed values, gap-retarget parameter — stub gaps for now)
 - ✅ Milestone: end-to-end scope → printed Variant A + memo, all 5 fixtures rendering cleanly

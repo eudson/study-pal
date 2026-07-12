@@ -1,0 +1,23 @@
+/* ============================================================
+   StudyPal base reset — element/document normalization.
+   NOT design tokens: this file holds the global reset that must
+   load before tokens.css and any component CSS. Keeping it out of
+   tokens.css keeps that file purely design tokens (its charter).
+   Import order (main.tsx): base.css → tokens.css → components.
+   ============================================================ */
+
+/* Zero browser-default margins/padding so viewport-height (100dvh)
+   shells fill correctly. Without this, body's 8px default margin
+   causes overflow. box-sizing is NOT set globally — each shell sets
+   it explicitly so each CSS module stays self-contained and auditable. */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  /* Prevent overscroll bounce propagating to the page root;
+     each screen shell manages its own overflow independently. */
+  overscroll-behavior: none;
+}

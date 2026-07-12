@@ -144,8 +144,21 @@ def open_authenticated_connection(
     Steps (invariant 1):
     1. Connect as the owner/DSN role.
     2. ``SET ROLE authenticated`` — drop to the non-privileged role so RLS fires.
-    3. ``SET LOCAL request.jwt.claims`` — inject the caller's user_id so
-       ``auth.uid()`` resolves correctly inside RLS policies.
+    3. ``set_config('request.jwt.claims', ..., false)`` — inject the caller's
+       user_id at SESSION scope so ``auth.uid()`` resolves correctly inside RLS
+       policies across ALL commits on this connection.
+
+    Why session scope (``false``) rather than transaction-local (``true``):
+    ``SET LOCAL`` / ``set_config(..., true)`` is cleared on every COMMIT, so a
+    request that issues multiple commits (e.g. generate: advance_to_generating
+    commits, then advance_to_parent_reviews commits) loses the claim after the
+    first commit and auth.uid() returns NULL on the second query, making the
+    cycle appear not-found.  This connection is opened per-request and closed in
+    the dependency's ``finally`` block — it is never pooled across users — so
+    session scope is safe: the claim lives exactly as long as the HTTP request.
+
+    Using ``set_config`` with a parameter also removes the f-string interpolation
+    that required the noqa suppression.
 
     The caller is responsible for closing this connection when the request ends.
     """
@@ -157,8 +170,6 @@ def open_authenticated_connection(
     )
     # Step 2: become the non-privileged role.
     conn.execute("SET ROLE authenticated")
-    # Step 3: inject claims per-transaction so auth.uid() works.
-    # SET LOCAL does not support parameterized values; the claims value is
-    # produced by json.dumps (from a validated UUID) — no SQL injection risk.
-    conn.execute(f"SET LOCAL request.jwt.claims = '{claims}'")  # noqa: S608
+    # Step 3: inject claims at SESSION scope so auth.uid() survives commits.
+    conn.execute("SELECT set_config('request.jwt.claims', %s, false)", (claims,))
     return conn

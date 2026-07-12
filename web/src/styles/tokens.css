@@ -6,6 +6,9 @@
    @fontsource/fredoka + @fontsource/atkinson-hyperlegible
    ============================================================ */
 
+/* Baseline element/document reset lives in base.css (loaded before this
+   file in main.tsx) — this file stays purely design tokens. */
+
 :root {
   /* ---------- palette families ---------- */
   /* paper (canvas & structure) */
@@ -110,6 +113,15 @@
   /* ---------- spacing (4px base) ---------- */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* ---------- shadows ---------- */
+  --shadow-card: 0 8px 20px -14px rgba(0, 0, 0, 0.28);   /* paper card lift — formal document feel */
+  --shadow-raised: 0 2px 8px -4px rgba(0, 0, 0, 0.18);   /* generic raised surface */
+
+  /* ---------- overlays ---------- */
+  /* ink-900 (#29323C) at 45% — used for dialog backdrops. Defined here so
+     components never hardcode a colour value. */
+  --backdrop-overlay: rgba(41, 50, 60, 0.45);
 
   /* ---------- shape ---------- */
   --r-control: 12px;

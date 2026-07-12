@@ -170,17 +170,30 @@ def get_jwt_verifier(
 
 
 def identity_from_stub_header(raw_header: str | None, settings: Settings) -> Identity:
-    """Parse ``X-User-Id: <user_id>/<family_id>`` into an ``Identity`` or raise 401."""
+    """Parse ``X-User-Id`` into an ``Identity`` or raise 401.
+
+    Accepted formats:
+    - ``<user_id>``               — new users who have no family yet
+    - ``<user_id>/<family_id>``   — existing users (family already bootstrapped)
+
+    Three or more segments are rejected (extra slashes are almost certainly a
+    copy-paste error, not a valid identity).
+    """
     if raw_header is None:
         raise _unauthorized("Missing identity header")
 
     parts = raw_header.strip().split("/")
-    if len(parts) != 2:
-        raise _unauthorized("Malformed identity header: expected <user_id>/<family_id>")
-    try:
-        return Identity(user_id=uuid.UUID(parts[0]), family_id=uuid.UUID(parts[1]))
-    except (ValueError, AttributeError) as exc:
-        raise _unauthorized(f"Invalid UUID in identity header: {exc}") from exc
+    if len(parts) == 1:
+        try:
+            return Identity(user_id=uuid.UUID(parts[0]))
+        except (ValueError, AttributeError) as exc:
+            raise _unauthorized(f"Invalid UUID in identity header: {exc}") from exc
+    if len(parts) == 2:
+        try:
+            return Identity(user_id=uuid.UUID(parts[0]), family_id=uuid.UUID(parts[1]))
+        except (ValueError, AttributeError) as exc:
+            raise _unauthorized(f"Invalid UUID in identity header: {exc}") from exc
+    raise _unauthorized("Malformed identity header: expected <user_id> or <user_id>/<family_id>")
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,350 @@
+/* Cycle detail — p6 (draft preview), p6b (screen view) */
+/* All values via tokens. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  /* Exact viewport height with inner scroll: the shell is bounded so the
+     action footer never goes below the fold. The paper card expands into the
+     remaining space and scrolls within its own area. */
+  height: 100dvh;
+  overflow: hidden;
+  padding: var(--sp-4) var(--sp-5) var(--sp-6);
+  background: var(--canvas);
+  gap: var(--sp-4);
+  box-sizing: border-box;
+}
+
+.loadingShell {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas);
+}
+
+/* Generating state */
+.generatingShell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: var(--sp-5) var(--sp-6);
+  background: var(--canvas);
+}
+
+.generatingContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-5);
+  text-align: center;
+}
+
+.generatingHeading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+}
+
+.generatingSubtext {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+}
+
+/* Header */
+.draftHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.draftHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.backBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-1);
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  border-radius: var(--r-control);
+}
+
+.backBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+}
+
+.draftSubtext {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  margin: 0;
+}
+
+.bodyCopy {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  margin: 0;
+}
+
+/* Paper card */
+.paperCard {
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-card);
+  background: var(--surface-raised);
+  padding: var(--sp-5);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+  /* flex:1 lets the card expand into available space so the action footer
+     stays anchored at the bottom of the viewport. overflow-y:auto scrolls
+     the paper content within the card. */
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* paperCardFlex is kept for the screen-view route where the card was already
+   flex:1 — it is now a no-op alias of the base .paperCard behaviour. */
+.paperCardFlex {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Paper inner content — formal school style */
+.paperInner {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.paperHeader {
+  text-align: center;
+  border-bottom: 1.5px solid var(--ink-900);
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.paperTitle {
+  font-weight: var(--fw-body-bold);
+  font-size: 15px;
+}
+
+.paperMeta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.paperInstructions {
+  background: var(--surface-well);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.paperSection {
+  margin-bottom: var(--sp-3);
+}
+
+.paperSectionHeading {
+  font-weight: var(--fw-body-bold);
+  font-size: 13px;
+  border-bottom: 1px solid var(--paper-300);
+  padding-bottom: 4px;
+  margin-bottom: var(--sp-2);
+}
+
+.paperSectionInstr {
+  font-weight: var(--fw-body);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.questionRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-2);
+}
+
+.questionNumber {
+  font-weight: var(--fw-body-bold);
+  min-width: 24px;
+  flex-shrink: 0;
+}
+
+.questionText {
+  flex: 1;
+}
+
+.questionMarks {
+  color: var(--ink-400);
+  font-size: 11px;
+  white-space: nowrap;
+  margin-left: var(--sp-1);
+}
+
+.paperTruncated {
+  color: var(--ink-400);
+  font-size: 11px;
+  margin-top: var(--sp-2);
+}
+
+/* Screen view link */
+.screenViewLink {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-size: var(--fs-sm);
+  text-align: center;
+  color: var(--action-text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color var(--dur-fast) var(--ease-out);
+  /* meet parent touch-target floor */
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-1) 0;
+}
+
+.screenViewLink:hover {
+  text-decoration-color: var(--action-text);
+}
+
+.screenViewLink:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: 2px;
+}
+
+/* Error box */
+.errorBox {
+  background: var(--growing-bg);
+  border: 1.5px solid var(--growing);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--growing-text);
+  line-height: var(--lh-body);
+}
+
+.errorText {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.backLink {
+  font-size: var(--fs-sm);
+  color: var(--action-text);
+}
+
+.backLink:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: 2px;
+}
+
+/* Action stack */
+.actionStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.ctaFull {
+  width: 100%;
+}
+
+.secondaryBtn {
+  appearance: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  border-bottom-width: var(--sticker-edge-w);
+  border-radius: var(--r-control);
+  padding: var(--sp-3);
+  min-height: var(--touch-min);
+  cursor: pointer;
+  width: 100%;
+  transition: transform var(--dur-fast) var(--ease-out), border-bottom-width var(--dur-fast) var(--ease-out);
+}
+
+.secondaryBtn:active:not(:disabled) {
+  transform: translateY(2px);
+  border-bottom-width: var(--sticker-edge-pressed);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.secondaryBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Spinner */
+.spinner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 5px solid var(--paper-300);
+  border-top-color: var(--coral-500);
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--paper-300);
+    opacity: 0.6;
+  }
+}

@@ -1,0 +1,18 @@
+/* Root shell — parent-mode wrapper and full-screen loading states. All values via tokens. */
+
+.appRoot {
+  /* Establishes the parent canvas for the whole authed app */
+  min-height: 100dvh;
+  background: var(--canvas);
+}
+
+.loadingShell {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas);
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentResponses, GetHealthData, GetHealthResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetHealthData, GetHealthResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListSubjectsData, ListSubjectsResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -54,6 +54,192 @@ export const validateAssessment = <ThrowOnError extends boolean = false>(options
 export const generateAssessment = <ThrowOnError extends boolean = false>(options: Options<GenerateAssessmentData, ThrowOnError>): RequestResult<GenerateAssessmentResponses, GenerateAssessmentErrors, ThrowOnError> => (options.client ?? client).post<GenerateAssessmentResponses, GenerateAssessmentErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
     url: '/assessments/generate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List the families the caller belongs to.
+ */
+export const listFamilies = <ThrowOnError extends boolean = false>(options?: Options<ListFamiliesData, ThrowOnError>): RequestResult<ListFamiliesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListFamiliesResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/families',
+    ...options
+});
+
+/**
+ * Bootstrap: create a family + membership (+ optional first child).
+ *
+ * Create the caller's family in a single atomic DB call via the
+ * SECURITY DEFINER function (0003_bootstrap.sql).
+ *
+ * Idempotent: if the caller already has a family, returns it unchanged.
+ * ``child_name`` and ``grade_label`` must both be provided or both omitted.
+ */
+export const bootstrapFamily = <ThrowOnError extends boolean = false>(options: Options<BootstrapFamilyData, ThrowOnError>): RequestResult<BootstrapFamilyResponses, BootstrapFamilyErrors, ThrowOnError> => (options.client ?? client).post<BootstrapFamilyResponses, BootstrapFamilyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/families',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List children in the caller's family.
+ */
+export const listChildren = <ThrowOnError extends boolean = false>(options?: Options<ListChildrenData, ThrowOnError>): RequestResult<ListChildrenResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListChildrenResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/children',
+    ...options
+});
+
+/**
+ * Add a child to the caller's family.
+ *
+ * family_id is resolved server-side from the caller's membership.
+ */
+export const createChild = <ThrowOnError extends boolean = false>(options: Options<CreateChildData, ThrowOnError>): RequestResult<CreateChildResponses, CreateChildErrors, ThrowOnError> => (options.client ?? client).post<CreateChildResponses, CreateChildErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/children',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Partially update a child's profile (name, grade, visibility defaults).
+ *
+ * Partial update (PATCH semantics): only supplied fields are changed.
+ *
+ * RLS ensures the caller can only update children in their own family.
+ * Returns 404 if the child is not found or not accessible.
+ */
+export const updateChild = <ThrowOnError extends boolean = false>(options: Options<UpdateChildData, ThrowOnError>): RequestResult<UpdateChildResponses, UpdateChildErrors, ThrowOnError> => (options.client ?? client).patch<UpdateChildResponses, UpdateChildErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/children/{child_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Archive a child (reversible soft-delete — hides cycles from the child).
+ *
+ * Sets archived_at = now().
+ *
+ * The child no longer appears in GET /children (active-only list).
+ * RLS ensures the caller can only archive children in their own family.
+ * Returns 404 if the child is not found, already archived, or not accessible.
+ */
+export const archiveChild = <ThrowOnError extends boolean = false>(options: Options<ArchiveChildData, ThrowOnError>): RequestResult<ArchiveChildResponses, ArchiveChildErrors, ThrowOnError> => (options.client ?? client).post<ArchiveChildResponses, ArchiveChildErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/children/{child_id}/archive',
+    ...options
+});
+
+/**
+ * List subjects in the caller's family.
+ */
+export const listSubjects = <ThrowOnError extends boolean = false>(options?: Options<ListSubjectsData, ThrowOnError>): RequestResult<ListSubjectsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListSubjectsResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/subjects',
+    ...options
+});
+
+/**
+ * Add a subject for a child.
+ *
+ * family_id is resolved server-side from the caller's membership.
+ *
+ * ``name`` is freeform; the app never interprets it (ARCHITECTURE golden rule 4).
+ */
+export const createSubject = <ThrowOnError extends boolean = false>(options: Options<CreateSubjectData, ThrowOnError>): RequestResult<CreateSubjectResponses, CreateSubjectErrors, ThrowOnError> => (options.client ?? client).post<CreateSubjectResponses, CreateSubjectErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/subjects',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List all cycles for the caller's family.
+ */
+export const listCycles = <ThrowOnError extends boolean = false>(options?: Options<ListCyclesData, ThrowOnError>): RequestResult<ListCyclesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ListCyclesResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles',
+    ...options
+});
+
+/**
+ * Create a new diagnostic cycle for a subject.
+ *
+ * Create a cycle in SCOPE_UPLOADED state.
+ *
+ * family_id is resolved server-side from the caller's membership (invariant 3).
+ * ``scope_text`` is the text-first scope intake for this slice.
+ */
+export const createCycle = <ThrowOnError extends boolean = false>(options: Options<CreateCycleData, ThrowOnError>): RequestResult<CreateCycleResponses, CreateCycleErrors, ThrowOnError> => (options.client ?? client).post<CreateCycleResponses, CreateCycleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get a cycle by id, including its assessment(s) if present.
+ */
+export const getCycle = <ThrowOnError extends boolean = false>(options: Options<GetCycleData, ThrowOnError>): RequestResult<GetCycleResponses, GetCycleErrors, ThrowOnError> => (options.client ?? client).get<GetCycleResponses, GetCycleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}',
+    ...options
+});
+
+/**
+ * Generate Variant-A assessment for a cycle; advances cycle state.
+ *
+ * Generate Variant-A using FakeClaude (live Claude is deferred).
+ *
+ * State machine:
+ * SCOPE_UPLOADED → GENERATING_A  (before generation starts)
+ * GENERATING_A   → PARENT_REVIEWS_DRAFT  (on success)
+ *
+ * On validation failure after retry, the cycle stays in GENERATING_A
+ * and a structured error is returned (HTTP 422).
+ */
+export const generateAssessmentForCycle = <ThrowOnError extends boolean = false>(options: Options<GenerateAssessmentForCycleData, ThrowOnError>): RequestResult<GenerateAssessmentForCycleResponses, GenerateAssessmentForCycleErrors, ThrowOnError> => (options.client ?? client).post<GenerateAssessmentForCycleResponses, GenerateAssessmentForCycleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/generate',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Parent approves the draft — advances to APPROVED_PRINTED.
+ *
+ * PARENT_REVIEWS_DRAFT → APPROVED_PRINTED.
+ *
+ * Records ``parent_approval_at`` (now()) and optional ``note`` (golden rule 8).
+ */
+export const approveCycleDraft = <ThrowOnError extends boolean = false>(options: Options<ApproveCycleDraftData, ThrowOnError>): RequestResult<ApproveCycleDraftResponses, ApproveCycleDraftErrors, ThrowOnError> => (options.client ?? client).post<ApproveCycleDraftResponses, ApproveCycleDraftErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/approve',
     ...options,
     headers: {
         'Content-Type': 'application/json',
