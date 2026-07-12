@@ -11,6 +11,26 @@ jobs:
     defaults:
       run:
         working-directory: api
+    # Postgres service so the RLS isolation tier runs in CI instead of skipping.
+    # Bare Postgres (no Supabase auth.uid()) → 0002's local-emulation path applies,
+    # mirroring the docker `db` service the tests were written against.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: studypal
+          POSTGRES_PASSWORD: studypal
+          POSTGRES_DB: studypal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studypal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Consumed by `make migrate` (migrate DSN precedence) and the RLS tier.
+      STUDYPAL_DB_DSN: postgresql://studypal:studypal@localhost:5432/studypal
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -28,6 +48,12 @@ jobs:
           uv run ruff format --check .
       - name: Mypy
         run: uv run mypy .
+      - name: Install psql client
+        working-directory: ${{ github.workspace }}
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Apply migrations
+        working-directory: ${{ github.workspace }}
+        run: make migrate
       - name: Pytest
         run: uv run pytest
 
