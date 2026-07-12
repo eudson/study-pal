@@ -197,5 +197,5 @@ uiux agents, verification + wiring by the orchestrator. Runs against
 - **Supabase Storage** scope upload (photo/PDF) — text-first for now.
 - **Live generation (C4)** — still deferred pending architect discussion.
 - **Fixtures (E1)** — transcribe artefacts, flip the replay gate on.
-- **Design export** `docs/desing/StudyPal Journeys.html` left untracked
-  (misspelled dir; large asset) — rename to `docs/design/` + commit if wanted.
+- **Design export** committed at `docs/design/StudyPal Journeys.html` — the
+  Claude Design journeys reference for the parent/child screens.
