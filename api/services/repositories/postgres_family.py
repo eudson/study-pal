@@ -269,7 +269,9 @@ class PostgresFamilyRepository:
             INSERT INTO cycles (family_id, subject_id, scope_text, state)
             VALUES (%s, %s, %s, 'SCOPE_UPLOADED')
             RETURNING id, family_id, subject_id, state, scope_text,
-                      parent_approval_at, parent_approval_note, created_at, updated_at
+                      parent_approval_at, parent_approval_note,
+                      marks_published_at, published_visibility,
+                      created_at, updated_at
             """,
             (str(family_id), str(subject_id), scope_text),
         )
@@ -284,7 +286,9 @@ class PostgresFamilyRepository:
         cur.execute(
             """
             SELECT c.id, c.family_id, c.subject_id, c.state, c.scope_text,
-                   c.parent_approval_at, c.parent_approval_note, c.created_at, c.updated_at,
+                   c.parent_approval_at, c.parent_approval_note,
+                   c.marks_published_at, c.published_visibility,
+                   c.created_at, c.updated_at,
                    COALESCE(
                        json_agg(a.assessment ORDER BY a.created_at)
                        FILTER (WHERE a.id IS NOT NULL),
@@ -307,7 +311,9 @@ class PostgresFamilyRepository:
         cur.execute(
             """
             SELECT id, family_id, subject_id, state, scope_text,
-                   parent_approval_at, parent_approval_note, created_at, updated_at
+                   parent_approval_at, parent_approval_note,
+                   marks_published_at, published_visibility,
+                   created_at, updated_at
             FROM cycles
             WHERE family_id = %s
             ORDER BY created_at
@@ -333,12 +339,49 @@ class PostgresFamilyRepository:
                 parent_approval_note = COALESCE(%s, parent_approval_note)
             WHERE id = %s
             RETURNING id, family_id, subject_id, state, scope_text,
-                      parent_approval_at, parent_approval_note, created_at, updated_at
+                      parent_approval_at, parent_approval_note,
+                      marks_published_at, published_visibility,
+                      created_at, updated_at
             """,
             (
                 new_state.value,
                 parent_approval_at,
                 parent_approval_note,
+                str(cycle_id),
+            ),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError(f"Cycle {cycle_id} not found or not accessible")
+        self._conn.commit()
+        return _row_to_cycle(row)
+
+    def publish_marks(
+        self,
+        cycle_id: uuid.UUID,
+        new_state: CycleState,
+        marks_published_at: datetime,
+        published_visibility: VisibilityDefaults,
+    ) -> CycleResponse:
+        """Record marks publish: freeze visibility snapshot + advance state (golden rule 8)."""
+        cur = self._conn.cursor()
+        cur.execute(
+            """
+            UPDATE cycles
+            SET state                 = %s,
+                updated_at            = now(),
+                marks_published_at    = %s,
+                published_visibility  = %s::jsonb
+            WHERE id = %s
+            RETURNING id, family_id, subject_id, state, scope_text,
+                      parent_approval_at, parent_approval_note,
+                      marks_published_at, published_visibility,
+                      created_at, updated_at
+            """,
+            (
+                new_state.value,
+                marks_published_at,
+                published_visibility.model_dump_json(),
                 str(cycle_id),
             ),
         )
@@ -402,6 +445,16 @@ def _row_to_cycle(row: dict[str, object]) -> CycleResponse:
     # swallow bad stored data.
     assessments: list[Assessment] = [Assessment.model_validate(doc) for doc in raw_list]
 
+    # Parse published_visibility JSONB snapshot (0007 column — may be absent on
+    # rows created before the migration or on queries that don't SELECT it).
+    published_visibility_raw = row.get("published_visibility")
+    published_visibility: VisibilityDefaults | None = None
+    if published_visibility_raw is not None:
+        if isinstance(published_visibility_raw, dict):
+            published_visibility = VisibilityDefaults.model_validate(published_visibility_raw)
+        elif isinstance(published_visibility_raw, str):
+            published_visibility = VisibilityDefaults.model_validate_json(published_visibility_raw)
+
     return CycleResponse(
         id=uuid.UUID(str(row["id"])),
         family_id=uuid.UUID(str(row["family_id"])),
@@ -414,6 +467,10 @@ def _row_to_cycle(row: dict[str, object]) -> CycleResponse:
         parent_approval_note=(
             str(row["parent_approval_note"]) if row.get("parent_approval_note") else None
         ),
+        marks_published_at=(
+            _parse_dt(row["marks_published_at"]) if row.get("marks_published_at") else None
+        ),
+        published_visibility=published_visibility,
         created_at=_parse_dt(row["created_at"]),
         updated_at=_parse_dt(row["updated_at"]),
         assessments=assessments,

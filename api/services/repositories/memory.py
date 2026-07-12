@@ -19,7 +19,9 @@ from schemas.family import (
     SubjectResponse,
     VisibilityDefaults,
 )
+from schemas.gap_report import GapReport, GapReportRow
 from schemas.grading import QuestionMark
+from schemas.review import MarkPatchRequest
 
 
 def _now() -> datetime:
@@ -221,6 +223,28 @@ class InMemoryFamilyRepository:
         self._cycles[cycle_id] = updated
         return updated
 
+    def publish_marks(
+        self,
+        cycle_id: uuid.UUID,
+        new_state: CycleState,
+        marks_published_at: datetime,
+        published_visibility: VisibilityDefaults,
+    ) -> CycleResponse:
+        """Record marks publish: freeze visibility snapshot + advance state."""
+        cycle = self._cycles.get(cycle_id)
+        if cycle is None:
+            raise ValueError(f"Cycle {cycle_id} not found")
+        updated = cycle.model_copy(
+            update={
+                "state": new_state,
+                "updated_at": _now(),
+                "marks_published_at": marks_published_at,
+                "published_visibility": published_visibility,
+            }
+        )
+        self._cycles[cycle_id] = updated
+        return updated
+
 
 class InMemorySubmissionRepository:
     """Process-local submission store for unit tests (no Postgres required)."""
@@ -230,7 +254,7 @@ class InMemorySubmissionRepository:
 
     def create_submission(
         self,
-        family_id: uuid.UUID,  # noqa: ARG002 — stored implicitly via RLS in Postgres
+        family_id: uuid.UUID,
         assessment_id: str,
         payload: SubmissionCreate,
         cycle_id: uuid.UUID,
@@ -261,7 +285,7 @@ class InMemoryQuestionMarkRepository:
 
     def bulk_upsert(
         self,
-        family_id: uuid.UUID,  # noqa: ARG002 — used by Postgres tier for RLS
+        family_id: uuid.UUID,
         submission_id: uuid.UUID,
         marks: list[QuestionMark],
     ) -> list[QuestionMark]:
@@ -276,12 +300,81 @@ class InMemoryQuestionMarkRepository:
     def list_for_submission(self, submission_id: uuid.UUID) -> list[QuestionMark]:
         return [m for (sid, _qid), m in self._store.items() if sid == submission_id]
 
-    def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]:  # noqa: ARG002
+    def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]:
         # In-memory: we can't join through assessments, so return all marks.
         # Tests that need cycle-level isolation should use Postgres.
         return list(self._store.values())
 
-    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None:  # noqa: ARG002
+    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None:
         # Not meaningfully implementable without the relational join.
         # Tests that need this should use Postgres or pass submission_id directly.
         return None
+
+    def get_mark(
+        self,
+        submission_id: uuid.UUID,
+        question_id: str,
+    ) -> QuestionMark | None:
+        return self._store.get((submission_id, question_id))
+
+    def update_mark(
+        self,
+        submission_id: uuid.UUID,
+        question_id: str,
+        patch: MarkPatchRequest,
+        now: datetime,
+    ) -> QuestionMark:
+        """Apply parent review patch: final_marks, reviewed_at, overridden_at, error_category."""
+        existing = self._store.get((submission_id, question_id))
+        if existing is None:
+            raise ValueError(
+                f"Mark not found: submission_id={submission_id} question_id={question_id}"
+            )
+        update: dict[str, object] = {"reviewed_at": now}
+        if patch.final_marks is not None:
+            update["final_marks"] = patch.final_marks
+            if patch.final_marks != existing.suggested_marks:
+                update["overridden_at"] = now
+        if patch.error_category is not None:
+            update["error_category"] = patch.error_category
+        updated = existing.model_copy(update=update)
+        self._store[(submission_id, question_id)] = updated
+        return updated
+
+
+class InMemoryGapReportRepository:
+    """Process-local gap report store for unit tests (no Postgres required).
+
+    Satisfies the GapReportRepository Protocol.
+    Keyed by cycle_id (UNIQUE constraint mirrors the DB table).
+    """
+
+    def __init__(self) -> None:
+        # cycle_id → GapReportRow
+        self._store: dict[uuid.UUID, GapReportRow] = {}
+
+    def upsert(
+        self,
+        family_id: uuid.UUID,
+        cycle_id: uuid.UUID,
+        submission_id: uuid.UUID,
+        report: GapReport,
+    ) -> GapReportRow:
+        """Upsert: insert or overwrite the gap report for this cycle."""
+        # Preserve the existing row id on re-runs for stable audit trails.
+        existing = self._store.get(cycle_id)
+        row_id = existing.id if existing is not None else uuid.uuid4()
+        now = _now()
+        row = GapReportRow(
+            id=row_id,
+            family_id=family_id,
+            cycle_id=cycle_id,
+            submission_id=submission_id,
+            report=report,
+            created_at=now,
+        )
+        self._store[cycle_id] = row
+        return row
+
+    def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
+        return self._store.get(cycle_id)

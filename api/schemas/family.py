@@ -188,6 +188,9 @@ class CycleResponse(BaseModel):
     scope_text: str | None = None
     parent_approval_at: datetime | None = None
     parent_approval_note: str | None = None
+    # Phase 3 publish gate — distinct from the draft approval above.
+    marks_published_at: datetime | None = None
+    published_visibility: VisibilityDefaults | None = None
     created_at: datetime
     updated_at: datetime
     # Assessments belonging to this cycle (included on GET /cycles/{id}).

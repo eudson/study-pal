@@ -113,7 +113,7 @@ function CycleDetailPage() {
     );
   }
 
-  // APPROVED_PRINTED → show "Enter answers" action to hand device to child
+  // APPROVED_PRINTED / ANSWERS_ENTERED → hand device to child
   if (cycle.state === "APPROVED_PRINTED" || cycle.state === "ANSWERS_ENTERED") {
     return (
       <ApprovedPrintedPage
@@ -121,6 +121,16 @@ function CycleDetailPage() {
         cycleId={cycleId}
       />
     );
+  }
+
+  // AUTO_MARKED / PARENT_REVIEW_MARKS → parent reviews and sets final marks
+  if (cycle.state === "AUTO_MARKED" || cycle.state === "PARENT_REVIEW_MARKS") {
+    return <AutoMarkedPage cycle={cycle} cycleId={cycleId} />;
+  }
+
+  // GAP_REPORT → marks published, show confirmation
+  if (cycle.state === "GAP_REPORT") {
+    return <PublishedPage cycleId={cycleId} />;
   }
 
   if (screenView) {
@@ -179,7 +189,9 @@ function ApprovedPrintedPage({ cycle, cycleId }: ApprovedPrintedPageProps) {
             {isAnswered ? "Answers entered" : "Ready to answer"}
           </div>
         </div>
-        <Chip variant={isAnswered ? "teal" : "gold"}>
+        {/* teal = confirmed/done; gold = awaiting action. "Approved" is a
+            completed step — teal. "Answers entered" is likewise complete. */}
+        <Chip variant="teal">
           {isAnswered ? "Answers entered" : "Approved"}
         </Chip>
       </div>
@@ -477,3 +489,107 @@ function SectionBlock({ section, allQuestions }: { section: Section; allQuestion
 
 // SectionBlock is used as a named export slot for the full (non-truncated) render path
 export { SectionBlock };
+
+// ────────────────────────────────────────────────────────
+// Auto-marked — parent marks review entry point
+// ────────────────────────────────────────────────────────
+
+interface AutoMarkedPageProps {
+  cycle: CycleResponse;
+  cycleId: string;
+}
+
+function AutoMarkedPage({ cycle, cycleId }: AutoMarkedPageProps) {
+  const navigate = useNavigate();
+  const isReviewing = cycle.state === "PARENT_REVIEW_MARKS";
+
+  return (
+    <div className={styles.shell}>
+      <div className={styles.draftHeader}>
+        <div className={styles.draftHeaderLeft}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            aria-label="Back"
+            onClick={() => void navigate({ to: "/" })}
+          >
+            ‹
+          </button>
+          <div className={styles.pageTitle}>
+            {isReviewing ? "Marks in review" : "Grading complete"}
+          </div>
+        </div>
+        {/* teal = auto-marking complete (§2 palette semantics);
+            gold = parent action in progress (in review). */}
+        <Chip variant={isReviewing ? "gold" : "teal"}>
+          {isReviewing ? "In review" : "Auto-marked"}
+        </Chip>
+      </div>
+
+      <p className={styles.draftSubtext}>
+        {isReviewing
+          ? "You have started reviewing the marks. Continue to see all questions and finalise before publishing."
+          : "Grading is complete. Review the marks and make any adjustments before publishing to your child."}
+      </p>
+
+      <div className={styles.actionStack}>
+        <StickerButton
+          className={styles.ctaFull}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/review",
+              params: { cycleId },
+            })
+          }
+        >
+          Review marks
+        </StickerButton>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// Published (GAP_REPORT) — confirmation view
+// ────────────────────────────────────────────────────────
+
+function PublishedPage({ cycleId }: { cycleId: string }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className={styles.shell}>
+      <div className={styles.draftHeader}>
+        <div className={styles.draftHeaderLeft}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            aria-label="Back"
+            onClick={() => void navigate({ to: "/" })}
+          >
+            ‹
+          </button>
+          <div className={styles.pageTitle}>Results published</div>
+        </div>
+        <Chip variant="teal">Published</Chip>
+      </div>
+
+      <p className={styles.draftSubtext}>
+        The marks have been published to your child. The gap report will guide the study pack.
+      </p>
+
+      <div className={styles.actionStack}>
+        <StickerButton
+          className={styles.ctaFull}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/review",
+              params: { cycleId },
+            })
+          }
+        >
+          View marks
+        </StickerButton>
+      </div>
+    </div>
+  );
+}

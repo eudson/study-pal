@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetHealthData, GetHealthResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -326,5 +326,98 @@ export const gradeSubmissionMarks = <ThrowOnError extends boolean = false>(optio
 export const listQuestionMarks = <ThrowOnError extends boolean = false>(options: Options<ListQuestionMarksData, ThrowOnError>): RequestResult<ListQuestionMarksResponses, ListQuestionMarksErrors, ThrowOnError> => (options.client ?? client).get<ListQuestionMarksResponses, ListQuestionMarksErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
     url: '/cycles/{cycle_id}/marks',
+    ...options
+});
+
+/**
+ * Parent override of a single question mark. Sets final_marks, reviewed_at, and overridden_at. On first call, transitions AUTO_MARKED → PARENT_REVIEW_MARKS.
+ *
+ * Apply a parent review patch to a single question mark.
+ *
+ * Guards:
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Cycle is in AUTO_MARKED or PARENT_REVIEW_MARKS.
+ * 3. The question mark exists for this cycle's submission.
+ * 4. final_marks (if provided) must be <= marks_total.
+ *
+ * Transition: AUTO_MARKED → PARENT_REVIEW_MARKS on the first PATCH.
+ * Already in PARENT_REVIEW_MARKS: no transition needed.
+ */
+export const reviewQuestionMark = <ThrowOnError extends boolean = false>(options: Options<ReviewQuestionMarkData, ThrowOnError>): RequestResult<ReviewQuestionMarkResponses, ReviewQuestionMarkErrors, ThrowOnError> => (options.client ?? client).patch<ReviewQuestionMarkResponses, ReviewQuestionMarkErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/marks/{question_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Publish marks to the child. Requires all final_marks to be set. Freezes visibility snapshot. Transitions PARENT_REVIEW_MARKS → GAP_REPORT.
+ *
+ * Publish marks to the child (approval-gated, golden rule 8).
+ *
+ * Guards:
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Cycle is in PARENT_REVIEW_MARKS.
+ * 3. Every question mark has final_marks set — 409 with list of unresolved
+ * question_ids if not.
+ *
+ * On success:
+ * - Resolves child's visibility_defaults and merges with request overrides.
+ * - Freezes the merged result as published_visibility in the cycle row.
+ * - Records marks_published_at = now() (parent approval timestamp, golden rule 8).
+ * - Transitions PARENT_REVIEW_MARKS → GAP_REPORT via cycle.py.
+ *
+ * NOTE: This endpoint does NOT build or return the child results view.
+ * The future child results endpoint (Phase 4+) MUST:
+ * - Read published_visibility server-side.
+ * - Exclude ai_rationale from the child response when published_visibility.ai_rationale is False.
+ * - Never expose correct_answer_rendered or memo fields to the child.
+ */
+export const publishMarks = <ThrowOnError extends boolean = false>(options: Options<PublishMarksData, ThrowOnError>): RequestResult<PublishMarksResponses, PublishMarksErrors, ThrowOnError> => (options.client ?? client).post<PublishMarksResponses, PublishMarksErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/publish',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Return the stored gap report for a cycle. 404 if not yet generated.
+ *
+ * Return the persisted gap report.
+ *
+ * Guards:
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Gap report row exists — 404 if not yet generated.
+ */
+export const getGapReport = <ThrowOnError extends boolean = false>(options: Options<GetGapReportData, ThrowOnError>): RequestResult<GetGapReportResponses, GetGapReportErrors, ThrowOnError> => (options.client ?? client).get<GetGapReportResponses, GetGapReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/gap-report',
+    ...options
+});
+
+/**
+ * Derive the gap report from reviewed marks and upsert to storage. Idempotent. Cycle must be in GAP_REPORT or a later state.
+ *
+ * Derive and persist the gap report for a cycle.
+ *
+ * Guards:
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Cycle is in GAP_REPORT or a later state (marks published).
+ * 3. The cycle has a Variant-A assessment.
+ * 4. The cycle has at least one graded mark.
+ *
+ * Derivation is deterministic — no Claude call.
+ * final_marks is guaranteed set by the publish gate; any None value causes a
+ * 500 (invariant violation) rather than silently producing a wrong report.
+ */
+export const generateGapReport = <ThrowOnError extends boolean = false>(options: Options<GenerateGapReportData, ThrowOnError>): RequestResult<GenerateGapReportResponses, GenerateGapReportErrors, ThrowOnError> => (options.client ?? client).post<GenerateGapReportResponses, GenerateGapReportErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/gap-report',
     ...options
 });

@@ -4,15 +4,14 @@ All cycle state transitions MUST go through this module — never by direct
 column updates elsewhere.  Every child-visible transition records parent
 approval + timestamp (golden rule 8).
 
-Implemented transitions for this slice (scope-in → draft → approve):
+Implemented transitions:
     SCOPE_UPLOADED → GENERATING_A
     GENERATING_A   → PARENT_REVIEWS_DRAFT
     PARENT_REVIEWS_DRAFT → APPROVED_PRINTED  (child-visible gate)
-
-The remaining transitions (ANSWERS_ENTERED → … → CYCLE_COMPLETE) are
-defined in the allowed-transitions table so illegal transitions are
-rejected consistently, but their service functions will be added in
-later slices.
+    APPROVED_PRINTED → ANSWERS_ENTERED
+    ANSWERS_ENTERED  → AUTO_MARKED
+    AUTO_MARKED      → PARENT_REVIEW_MARKS   (first mark patch triggers this)
+    PARENT_REVIEW_MARKS → GAP_REPORT         (publish gate — child-visible, parent approval)
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from schemas.family import CycleResponse, CycleState
+from schemas.family import CycleResponse, CycleState, VisibilityDefaults
 from services.repositories.base import FamilyRepository
 
 # ---------------------------------------------------------------------------
@@ -43,7 +42,14 @@ _ALLOWED: dict[CycleState, CycleState] = {
 
 # Transitions that make content visible to the child and require explicit
 # parent approval recorded with a timestamp (golden rule 8).
-_REQUIRES_PARENT_APPROVAL: frozenset[CycleState] = frozenset({CycleState.APPROVED_PRINTED})
+# GAP_REPORT is reached via the publish gate (POST /cycles/{id}/publish) which:
+#   - freezes the visibility snapshot in published_visibility (marks_published_at)
+#   - requires all final_marks to be set (guard)
+# This is the approval record for marks visibility; the state advance is
+# handled by publish_marks() below which records its own timestamp.
+_REQUIRES_PARENT_APPROVAL: frozenset[CycleState] = frozenset(
+    {CycleState.APPROVED_PRINTED, CycleState.GAP_REPORT}
+)
 
 
 class IllegalTransitionError(ValueError):
@@ -138,6 +144,52 @@ def advance_to_auto_marked(
     cycle = _require_cycle(repo, cycle_id)
     _assert_transition(cycle.state, CycleState.AUTO_MARKED)
     return repo.update_cycle_state(cycle_id, CycleState.AUTO_MARKED)
+
+
+def advance_to_parent_review_marks(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """AUTO_MARKED → PARENT_REVIEW_MARKS.
+
+    Called the first time the parent edits a mark (first PATCH on any question).
+    Not a child-visible gate — marks are not yet published.
+    Idempotent from the caller's perspective: if already in PARENT_REVIEW_MARKS
+    the router skips calling this.
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.PARENT_REVIEW_MARKS)
+    return repo.update_cycle_state(cycle_id, CycleState.PARENT_REVIEW_MARKS)
+
+
+def publish_marks(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+    published_visibility: VisibilityDefaults,
+) -> CycleResponse:
+    """PARENT_REVIEW_MARKS → GAP_REPORT.
+
+    The publish gate (golden rule 8 — child-visible transition with parent
+    approval + timestamp).  Records:
+    - marks_published_at = now() (the parent approval timestamp for marks)
+    - published_visibility = frozen snapshot (immutable after publish)
+    - state = GAP_REPORT
+
+    The caller (router) is responsible for the pre-publish guard:
+    every question mark must have final_marks set before this is called.
+
+    This function does NOT check the guard itself — that separation keeps
+    the service layer thin and the router in control of the 409 response shape.
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.GAP_REPORT)
+    approval_at = datetime.now(tz=UTC)
+    return repo.publish_marks(
+        cycle_id,
+        new_state=CycleState.GAP_REPORT,
+        marks_published_at=approval_at,
+        published_visibility=published_visibility,
+    )
 
 
 # ---------------------------------------------------------------------------

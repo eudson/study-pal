@@ -19,6 +19,7 @@ from typing import Any
 
 from schemas.assessment_schema import ErrorCategory, GradingPath
 from schemas.grading import QuestionMark
+from schemas.review import MarkPatchRequest
 from services.repositories.postgres import DictConn
 
 
@@ -187,6 +188,93 @@ class PostgresQuestionMarkRepository:
             return None
         return uuid.UUID(str(row["id"]))
 
+    def get_mark(
+        self,
+        submission_id: uuid.UUID,
+        question_id: str,
+    ) -> QuestionMark | None:
+        """Fetch a single mark by (submission_id, question_id)."""
+        cur = self._conn.cursor()
+        cur.execute(
+            """
+            SELECT id, family_id, submission_id, question_id,
+                   marks_total, suggested_marks, final_marks,
+                   grading_path, confidence, needs_review,
+                   ai_rationale, matched_alternative, error_category,
+                   reviewed_at, overridden_at, created_at
+            FROM question_marks
+            WHERE submission_id = %s AND question_id = %s
+            """,
+            (str(submission_id), question_id),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return _row_to_mark(row)
+
+    def update_mark(
+        self,
+        submission_id: uuid.UUID,
+        question_id: str,
+        patch: MarkPatchRequest,
+        now: datetime,
+    ) -> QuestionMark:
+        """Apply parent review patch: final_marks, reviewed_at, overridden_at, error_category.
+
+        Raises ValueError if the mark is not found or not accessible (RLS).
+        Sets overridden_at when final_marks differs from suggested_marks.
+        """
+        # Fetch current suggested_marks to determine if this is an override.
+        cur = self._conn.cursor()
+        cur.execute(
+            "SELECT suggested_marks FROM question_marks "
+            "WHERE submission_id = %s AND question_id = %s",
+            (str(submission_id), question_id),
+        )
+        existing_row = cur.fetchone()
+        if existing_row is None:
+            raise ValueError(
+                f"Mark not found: submission_id={submission_id} question_id={question_id}"
+            )
+        suggested = Decimal(str(existing_row["suggested_marks"]))
+
+        # Build dynamic SET clause.
+        set_parts: list[str] = ["reviewed_at = %s"]
+        params: list[Any] = [now]
+
+        if patch.final_marks is not None:
+            set_parts.append("final_marks = %s")
+            params.append(str(patch.final_marks))
+            if patch.final_marks != suggested:
+                set_parts.append("overridden_at = %s")
+                params.append(now)
+
+        if patch.error_category is not None:
+            set_parts.append("error_category = %s")
+            params.append(patch.error_category.value)
+
+        params.extend([str(submission_id), question_id])
+
+        sql = (
+            "UPDATE question_marks SET "
+            + ", ".join(set_parts)
+            + " WHERE submission_id = %s AND question_id = %s "
+            "RETURNING id, family_id, submission_id, question_id, "
+            "marks_total, suggested_marks, final_marks, "
+            "grading_path, confidence, needs_review, "
+            "ai_rationale, matched_alternative, error_category, "
+            "reviewed_at, overridden_at, created_at"
+        )
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError(
+                f"Mark not found after update: submission_id={submission_id} "
+                f"question_id={question_id}"
+            )
+        self._conn.commit()
+        return _row_to_mark(row)
+
 
 def _row_to_mark(row: dict[str, Any]) -> QuestionMark:
     """Convert a DB row dict to a QuestionMark model."""
@@ -210,9 +298,9 @@ def _row_to_mark(row: dict[str, Any]) -> QuestionMark:
     error_cat = ErrorCategory(str(error_cat_raw)) if error_cat_raw is not None else None
 
     marks_total_d = _to_decimal(row["marks_total"])
-    assert marks_total_d is not None  # noqa: S101 — NOT NULL column
+    assert marks_total_d is not None
     suggested_d = _to_decimal(row["suggested_marks"])
-    assert suggested_d is not None  # noqa: S101 — NOT NULL column
+    assert suggested_d is not None
 
     return QuestionMark(
         id=uuid.UUID(str(row["id"])),

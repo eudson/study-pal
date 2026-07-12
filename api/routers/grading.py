@@ -43,6 +43,8 @@ from schemas.grading import (
     ListMarksWithContextResponse,
     QuestionContext,
     QuestionMarkWithContext,
+    render_child_answer,
+    render_correct_answer,
 )
 from schemas.identity import Identity
 from services.auth import get_identity
@@ -203,6 +205,7 @@ def list_question_marks(
     identity: Identity = Depends(get_identity),
     family_repo: FamilyRepository = Depends(get_family_repository),
     marks_repo: QuestionMarkRepository = Depends(get_question_mark_repository),
+    submission_repo: SubmissionRepository = Depends(get_submission_repository),
 ) -> ListMarksWithContextResponse:
     """Return all marks for the cycle's submission.
 
@@ -228,6 +231,10 @@ def list_question_marks(
 
     raw_marks = marks_repo.list_for_cycle(cycle_id)
 
+    # Fetch child responses for rendering child_answer_rendered.
+    child_responses: list[ChildResponseItem] = _get_responses(submission_repo, submission_id)
+    child_payload_map: dict[str, dict[str, object]] = {r.qid: r.payload for r in child_responses}
+
     # Build question context map from the assessment.
     variant_a: Assessment | None = next(
         (a for a in cycle.assessments if a.variant == "A"),
@@ -237,7 +244,8 @@ def list_question_marks(
     if variant_a is not None:
         for section in variant_a.sections:
             for q in section.questions:
-                q_context[q.qid] = _build_context(q)
+                payload = child_payload_map.get(q.qid, {})
+                q_context[q.qid] = _build_context(q, payload)
 
     items = [
         QuestionMarkWithContext(
@@ -268,8 +276,9 @@ def list_question_marks(
 # ---------------------------------------------------------------------------
 
 
-def _build_context(q: Question) -> QuestionContext:
+def _build_context(q: Question, child_payload: dict[str, object] | None = None) -> QuestionContext:
     mr = q.mark_rules
+    payload: dict[str, object] = child_payload or {}
     return QuestionContext(
         qid=q.qid,
         number=q.number,
@@ -278,6 +287,8 @@ def _build_context(q: Question) -> QuestionContext:
         marks_total=Decimal(str(mr.total)),
         answer_marks=(Decimal(str(mr.answer_marks)) if mr.answer_marks is not None else None),
         method_marks=(Decimal(str(mr.method_marks)) if mr.method_marks is not None else None),
+        child_answer_rendered=render_child_answer(q.question_type.value, payload),
+        correct_answer_rendered=render_correct_answer(q.answer),
     )
 
 

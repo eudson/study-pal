@@ -16,6 +16,8 @@ import { Route as CyclesCycleIdRouteImport } from './routes/cycles/$cycleId'
 import { Route as CaptureCycleIdRouteImport } from './routes/capture/$cycleId'
 import { Route as SettingsChildrenNewRouteImport } from './routes/settings/children/new'
 import { Route as SettingsChildrenChildIdRouteImport } from './routes/settings/children/$childId'
+import { Route as CyclesCycleIdReviewRouteImport } from './routes/cycles/$cycleId.review'
+import { Route as CyclesCycleIdPublishRouteImport } from './routes/cycles/$cycleId.publish'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,22 +54,36 @@ const SettingsChildrenChildIdRoute = SettingsChildrenChildIdRouteImport.update({
   path: '/settings/children/$childId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CyclesCycleIdReviewRoute = CyclesCycleIdReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => CyclesCycleIdRoute,
+} as any)
+const CyclesCycleIdPublishRoute = CyclesCycleIdPublishRouteImport.update({
+  id: '/publish',
+  path: '/publish',
+  getParentRoute: () => CyclesCycleIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/capture/$cycleId': typeof CaptureCycleIdRoute
-  '/cycles/$cycleId': typeof CyclesCycleIdRoute
+  '/cycles/$cycleId': typeof CyclesCycleIdRouteWithChildren
   '/cycles/new': typeof CyclesNewRoute
   '/settings/': typeof SettingsIndexRoute
+  '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
+  '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
   '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
   '/settings/children/new': typeof SettingsChildrenNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/capture/$cycleId': typeof CaptureCycleIdRoute
-  '/cycles/$cycleId': typeof CyclesCycleIdRoute
+  '/cycles/$cycleId': typeof CyclesCycleIdRouteWithChildren
   '/cycles/new': typeof CyclesNewRoute
   '/settings': typeof SettingsIndexRoute
+  '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
+  '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
   '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
   '/settings/children/new': typeof SettingsChildrenNewRoute
 }
@@ -75,9 +91,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/capture/$cycleId': typeof CaptureCycleIdRoute
-  '/cycles/$cycleId': typeof CyclesCycleIdRoute
+  '/cycles/$cycleId': typeof CyclesCycleIdRouteWithChildren
   '/cycles/new': typeof CyclesNewRoute
   '/settings/': typeof SettingsIndexRoute
+  '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
+  '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
   '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
   '/settings/children/new': typeof SettingsChildrenNewRoute
 }
@@ -89,6 +107,8 @@ export interface FileRouteTypes {
     | '/cycles/$cycleId'
     | '/cycles/new'
     | '/settings/'
+    | '/cycles/$cycleId/publish'
+    | '/cycles/$cycleId/review'
     | '/settings/children/$childId'
     | '/settings/children/new'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +118,8 @@ export interface FileRouteTypes {
     | '/cycles/$cycleId'
     | '/cycles/new'
     | '/settings'
+    | '/cycles/$cycleId/publish'
+    | '/cycles/$cycleId/review'
     | '/settings/children/$childId'
     | '/settings/children/new'
   id:
@@ -107,6 +129,8 @@ export interface FileRouteTypes {
     | '/cycles/$cycleId'
     | '/cycles/new'
     | '/settings/'
+    | '/cycles/$cycleId/publish'
+    | '/cycles/$cycleId/review'
     | '/settings/children/$childId'
     | '/settings/children/new'
   fileRoutesById: FileRoutesById
@@ -114,7 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CaptureCycleIdRoute: typeof CaptureCycleIdRoute
-  CyclesCycleIdRoute: typeof CyclesCycleIdRoute
+  CyclesCycleIdRoute: typeof CyclesCycleIdRouteWithChildren
   CyclesNewRoute: typeof CyclesNewRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   SettingsChildrenChildIdRoute: typeof SettingsChildrenChildIdRoute
@@ -172,13 +196,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsChildrenChildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cycles/$cycleId/review': {
+      id: '/cycles/$cycleId/review'
+      path: '/review'
+      fullPath: '/cycles/$cycleId/review'
+      preLoaderRoute: typeof CyclesCycleIdReviewRouteImport
+      parentRoute: typeof CyclesCycleIdRoute
+    }
+    '/cycles/$cycleId/publish': {
+      id: '/cycles/$cycleId/publish'
+      path: '/publish'
+      fullPath: '/cycles/$cycleId/publish'
+      preLoaderRoute: typeof CyclesCycleIdPublishRouteImport
+      parentRoute: typeof CyclesCycleIdRoute
+    }
   }
 }
+
+interface CyclesCycleIdRouteChildren {
+  CyclesCycleIdPublishRoute: typeof CyclesCycleIdPublishRoute
+  CyclesCycleIdReviewRoute: typeof CyclesCycleIdReviewRoute
+}
+
+const CyclesCycleIdRouteChildren: CyclesCycleIdRouteChildren = {
+  CyclesCycleIdPublishRoute: CyclesCycleIdPublishRoute,
+  CyclesCycleIdReviewRoute: CyclesCycleIdReviewRoute,
+}
+
+const CyclesCycleIdRouteWithChildren = CyclesCycleIdRoute._addFileChildren(
+  CyclesCycleIdRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CaptureCycleIdRoute: CaptureCycleIdRoute,
-  CyclesCycleIdRoute: CyclesCycleIdRoute,
+  CyclesCycleIdRoute: CyclesCycleIdRouteWithChildren,
   CyclesNewRoute: CyclesNewRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   SettingsChildrenChildIdRoute: SettingsChildrenChildIdRoute,

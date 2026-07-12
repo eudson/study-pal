@@ -1,0 +1,204 @@
+/* Publish gate — p9. All values via tokens. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  padding: var(--sp-4) var(--sp-5) var(--sp-6);
+  background: var(--canvas);
+  gap: var(--sp-4);
+  box-sizing: border-box;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.backBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-1);
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  border-radius: var(--r-control);
+}
+
+.backBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+}
+
+.bodyCopy {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.sectionLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* Toggle list */
+.toggleList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  background: var(--surface-raised);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+}
+
+.toggleRowOff {
+  background: var(--surface-well);
+}
+
+.toggleLabel {
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.toggleRowOff .toggleLabel {
+  color: var(--text-secondary);
+}
+
+/* Toggle switch */
+.toggle {
+  appearance: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  width: 46px;
+  height: 26px;
+  position: relative;
+  transition: background var(--dur-base) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.toggleOn {
+  background: var(--teal-500);
+}
+
+.toggleOff {
+  background: var(--paper-400);
+}
+
+.toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  transition: left var(--dur-base) var(--ease-out);
+}
+
+.toggleOn .toggleThumb {
+  left: calc(100% - 24px);
+}
+
+.toggleOff .toggleThumb {
+  left: 2px;
+}
+
+/* Spacer */
+.spacer {
+  flex: 1;
+}
+
+/* Error */
+.errorBox {
+  flex-shrink: 0;
+  background: var(--growing-bg);
+  border: 1.5px solid var(--growing);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--growing-text);
+  line-height: var(--lh-body);
+}
+
+/* CTA */
+.ctaFull {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* Cancel */
+.cancelBtn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-2);
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cancelBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cancelBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--r-control);
+}

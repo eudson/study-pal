@@ -22,7 +22,9 @@ from schemas.family import (
     SubjectResponse,
     VisibilityDefaults,
 )
+from schemas.gap_report import GapReport, GapReportRow
 from schemas.grading import QuestionMark
+from schemas.review import MarkPatchRequest
 
 
 @runtime_checkable
@@ -118,6 +120,16 @@ class FamilyRepository(Protocol):
         parent_approval_note: str | None = None,
     ) -> CycleResponse: ...
 
+    def publish_marks(
+        self,
+        cycle_id: uuid.UUID,
+        new_state: CycleState,
+        marks_published_at: datetime,
+        published_visibility: VisibilityDefaults,
+    ) -> CycleResponse:
+        """Record marks publish: set state, marks_published_at, published_visibility."""
+        ...
+
 
 @runtime_checkable
 class SubmissionRepository(Protocol):
@@ -166,3 +178,55 @@ class QuestionMarkRepository(Protocol):
     def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]: ...
 
     def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None: ...
+
+    def get_mark(
+        self,
+        submission_id: uuid.UUID,
+        question_id: str,
+    ) -> QuestionMark | None:
+        """Fetch a single mark by (submission_id, question_id)."""
+        ...
+
+    def update_mark(
+        self,
+        submission_id: uuid.UUID,
+        question_id: str,
+        patch: MarkPatchRequest,
+        now: datetime,
+    ) -> QuestionMark:
+        """Apply a parent review patch to a single mark.
+
+        Sets final_marks and reviewed_at=now on every call.
+        Sets overridden_at=now when final_marks != suggested_marks.
+        Sets error_category when provided in the patch.
+
+        Raises ValueError if the mark is not found or not accessible.
+        """
+        ...
+
+
+@runtime_checkable
+class GapReportRepository(Protocol):
+    """Persistence for derived gap reports.
+
+    family_id is NEVER accepted from the client — resolved server-side via RLS.
+    One gap report per cycle (UNIQUE(cycle_id)); upsert on regenerate.
+    """
+
+    def upsert(
+        self,
+        family_id: uuid.UUID,
+        cycle_id: uuid.UUID,
+        submission_id: uuid.UUID,
+        report: GapReport,
+    ) -> GapReportRow:
+        """Upsert the gap report for a cycle.
+
+        Idempotent: re-running derive + upsert overwrites the previous row.
+        Returns the persisted GapReportRow.
+        """
+        ...
+
+    def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
+        """Return the gap report row for a cycle, or None if not yet generated."""
+        ...

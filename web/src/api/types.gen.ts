@@ -612,6 +612,11 @@ export type CycleResponse = {
      */
     parent_approval_note?: string | null;
     /**
+     * Marks Published At
+     */
+    marks_published_at?: string | null;
+    published_visibility?: VisibilityDefaults | null;
+    /**
      * Created At
      */
     created_at: string;
@@ -724,6 +729,164 @@ export type FillBlankAnswer = {
      */
     blanks: Array<Blank>;
 };
+
+/**
+ * GapReport
+ *
+ * Complete gap report for a single assessment cycle.
+ *
+ * Produced by ``derive_gap_report`` from the reviewed marks; stored as JSONB
+ * in the gap_reports table.  The study-pack phase reads ``items`` filtered to
+ * status="growing" to select retarget content.
+ *
+ * Clustering: ``items`` is a flat list (one per question).  There is no
+ * explicit topic field on questions — consumers wanting to cluster by tag should
+ * group ``items`` by ``gap_tags`` membership.  The report remains flat here to
+ * keep the Pydantic boundary simple and let the UI / study-pack phase decide
+ * the grouping strategy.
+ */
+export type GapReport = {
+    /**
+     * Assessment Id
+     */
+    assessment_id: string;
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Items
+     */
+    items?: Array<GapReportItem>;
+    summary: GapReportSummary;
+    /**
+     * Derived At
+     *
+     * UTC timestamp when the report was derived.
+     */
+    derived_at: string;
+};
+
+/**
+ * GapReportItem
+ *
+ * One question's result in a gap report.
+ *
+ * ``status`` is "mastered" when full marks were earned, "growing" otherwise
+ * (partial or zero marks — half-marks are legal everywhere, §8).
+ *
+ * ``gap_tags`` is passed through from the originating Question.gap_tags; these
+ * seed Variant B retargeting (ARCHITECTURE.md §5, VariantBRequest.gaps).
+ */
+export type GapReportItem = {
+    /**
+     * Question Id
+     *
+     * qid from the original assessment question.
+     */
+    question_id: string;
+    /**
+     * Number
+     *
+     * Question number as printed, e.g. "3", "3.1".
+     */
+    number: string;
+    /**
+     * Text
+     *
+     * Short question label (the full question text).
+     */
+    text: string;
+    status: GapStatus;
+    /**
+     * Final Marks
+     *
+     * Parent-reviewed final mark (post-publish).
+     */
+    final_marks: string;
+    /**
+     * Marks Total
+     *
+     * Maximum marks available for this question.
+     */
+    marks_total: string;
+    /**
+     * Error Category
+     *
+     * ErrorCategory value if the parent set one during review; null for mastered questions and untagged growing questions.
+     */
+    error_category?: string | null;
+    /**
+     * Gap Tags
+     *
+     * Gap tags from the original question; empty when none were declared. Growing items with tags are candidates for Variant B retargeting.
+     */
+    gap_tags?: Array<string>;
+};
+
+/**
+ * GapReportResponse
+ *
+ * API response for POST /cycles/{cycle_id}/gap-report and GET /.../gap-report.
+ */
+export type GapReportResponse = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    report: GapReport;
+};
+
+/**
+ * GapReportSummary
+ *
+ * Aggregate summary of a gap report.
+ *
+ * ``growing_gap_tags`` is the deduplicated union of all gap_tags across
+ * growing items — the set fed to Variant B generation to retarget gaps.
+ */
+export type GapReportSummary = {
+    /**
+     * Mastered Count
+     */
+    mastered_count: number;
+    /**
+     * Growing Count
+     */
+    growing_count: number;
+    /**
+     * Total Marks Earned
+     *
+     * Sum of final_marks across all questions.
+     */
+    total_marks_earned: string;
+    /**
+     * Total Marks Available
+     *
+     * Sum of marks_total across all questions.
+     */
+    total_marks_available: string;
+    /**
+     * Growing Gap Tags
+     *
+     * Distinct gap_tags from all growing items, sorted for stability. Empty when no growing items carry tags.
+     */
+    growing_gap_tags?: Array<string>;
+};
+
+/**
+ * GapStatus
+ *
+ * Mastery status for a single question's result.
+ *
+ * "growing" is used instead of "wrong"/"failed" (ARCHITECTURE.md §10 design rule:
+ * wrong answers are diagnostic data, not punishment — plum semantic).
+ */
+export type GapStatus = 'mastered' | 'growing';
 
 /**
  * GenerateAssessmentRequest
@@ -901,6 +1064,47 @@ export type ListMarksWithContextResponse = {
 };
 
 /**
+ * MarkPatchRequest
+ *
+ * Parent override of a single question mark.
+ *
+ * At least one of final_marks / error_category / note must be provided.
+ *
+ * Rules (enforced here AND by the DB check constraint):
+ * - final_marks must be in [0, marks_total] in 0.5 steps.
+ * - marks_total is not known at parse time so the 0 lower-bound and
+ * 0.5-step are the only static constraints here; the upper-bound is
+ * checked in the service layer against the stored marks_total.
+ */
+export type MarkPatchRequest = {
+    /**
+     * Final Marks
+     *
+     * Parent's confirmed mark. Must be a non-negative multiple of 0.5. Upper bound checked against marks_total in the service layer.
+     */
+    final_marks?: number | string | null;
+    /**
+     * Gap-report error category (§6 enum).
+     */
+    error_category?: ErrorCategory | null;
+    /**
+     * Note
+     *
+     * Optional parent note (not persisted in this phase — reserved for future).
+     */
+    note?: string | null;
+};
+
+/**
+ * MarkPatchResponse
+ *
+ * Updated QuestionMark returned from PATCH /cycles/{cycle_id}/marks/{question_id}.
+ */
+export type MarkPatchResponse = {
+    mark: QuestionMark;
+};
+
+/**
  * MarkRules
  */
 export type MarkRules = {
@@ -1013,6 +1217,64 @@ export type OrderingAnswer = {
 };
 
 /**
+ * PublishRequest
+ *
+ * Per-cycle visibility override merged with the child's visibility_defaults.
+ *
+ * All fields are optional — omitted fields fall back to the child's stored
+ * visibility_defaults.  The merged result is frozen as ``published_visibility``
+ * in the cycle row (golden rule 8: approval + timestamp).
+ */
+export type PublishRequest = {
+    /**
+     * Accuracy
+     *
+     * Override the child's accuracy toggle for this cycle's published view. Defaults to child's visibility_defaults.accuracy when omitted.
+     */
+    accuracy?: boolean | null;
+    /**
+     * Effort
+     *
+     * Override effort toggle. Defaults to child's visibility_defaults.effort.
+     */
+    effort?: boolean | null;
+    /**
+     * Growing
+     *
+     * Override growing toggle. Defaults to child's visibility_defaults.growing.
+     */
+    growing?: boolean | null;
+    /**
+     * Ai Rationale
+     *
+     * Override ai_rationale toggle. Defaults to child's visibility_defaults.ai_rationale. NOTE: the future child results endpoint MUST filter ai_rationale server-side based on published_visibility.ai_rationale — never expose it when False.
+     */
+    ai_rationale?: boolean | null;
+};
+
+/**
+ * PublishResponse
+ *
+ * Response from POST /cycles/{cycle_id}/publish.
+ *
+ * Carries the updated cycle state and the frozen visibility snapshot.
+ * The child results endpoint (future phase) MUST read published_visibility
+ * server-side and exclude ai_rationale when its toggle is False.
+ */
+export type PublishResponse = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    state: CycleState;
+    /**
+     * Marks Published At
+     */
+    marks_published_at: string;
+    published_visibility: VisibilityDefaults;
+};
+
+/**
  * Question
  */
 export type Question = {
@@ -1073,10 +1335,19 @@ export type Question = {
 /**
  * QuestionContext
  *
- * Minimal question context attached to a mark for the review screen.
+ * Question context attached to a mark for the parent review screen.
  *
- * Carries text/type/mark_rules so the parent can evaluate without
- * re-fetching the full assessment.
+ * Carries text/type/mark_rules, the child's submitted response (rendered as
+ * a human-readable string), and the correct answer / memo (also rendered).
+ *
+ * This model is parent-only — memo exposure here is correct (ARCHITECTURE.md §5).
+ * The child-facing view must never include ``child_answer_rendered`` (it would
+ * be a no-op anyway since the child sees a separate capture endpoint), but more
+ * importantly it must NEVER include ``correct_answer_rendered``.
+ *
+ * ``child_answer_rendered`` and ``correct_answer_rendered`` are plain strings,
+ * rendered via ``render_child_answer`` and ``render_correct_answer`` at query
+ * time.  The raw payload is NOT re-exposed here to keep the boundary clean.
  */
 export type QuestionContext = {
     /**
@@ -1107,6 +1378,18 @@ export type QuestionContext = {
      * Method Marks
      */
     method_marks?: string | null;
+    /**
+     * Child Answer Rendered
+     *
+     * Human-readable rendering of the child's submitted response for this question. Rendered server-side; safe to display directly on the review screen. PARENT-ONLY — must not appear in any child-facing response.
+     */
+    child_answer_rendered?: string;
+    /**
+     * Correct Answer Rendered
+     *
+     * Human-readable rendering of the correct answer / memo for this question. Derived from the assessment's AnswerPayload. PARENT-ONLY — MUST NOT be included in any child-facing response. The future child results endpoint must never call render_correct_answer.
+     */
+    correct_answer_rendered?: string;
 };
 
 /**
@@ -1186,7 +1469,7 @@ export type QuestionMark = {
 /**
  * QuestionMarkWithContext
  *
- * QuestionMark + its question context, for Phase 3 review.
+ * QuestionMark + its enriched question context, for Phase 3 review.
  */
 export type QuestionMarkWithContext = {
     mark: QuestionMark;
@@ -1686,6 +1969,11 @@ export type CycleResponseWritable = {
      * Parent Approval Note
      */
     parent_approval_note?: string | null;
+    /**
+     * Marks Published At
+     */
+    marks_published_at?: string | null;
+    published_visibility?: VisibilityDefaults | null;
     /**
      * Created At
      */
@@ -2315,3 +2603,127 @@ export type ListQuestionMarksResponses = {
 };
 
 export type ListQuestionMarksResponse = ListQuestionMarksResponses[keyof ListQuestionMarksResponses];
+
+export type ReviewQuestionMarkData = {
+    body: MarkPatchRequest;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+        /**
+         * Question Id
+         */
+        question_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/marks/{question_id}';
+};
+
+export type ReviewQuestionMarkErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReviewQuestionMarkError = ReviewQuestionMarkErrors[keyof ReviewQuestionMarkErrors];
+
+export type ReviewQuestionMarkResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarkPatchResponse;
+};
+
+export type ReviewQuestionMarkResponse = ReviewQuestionMarkResponses[keyof ReviewQuestionMarkResponses];
+
+export type PublishMarksData = {
+    body: PublishRequest;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/publish';
+};
+
+export type PublishMarksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PublishMarksError = PublishMarksErrors[keyof PublishMarksErrors];
+
+export type PublishMarksResponses = {
+    /**
+     * Successful Response
+     */
+    200: PublishResponse;
+};
+
+export type PublishMarksResponse = PublishMarksResponses[keyof PublishMarksResponses];
+
+export type GetGapReportData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/gap-report';
+};
+
+export type GetGapReportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetGapReportError = GetGapReportErrors[keyof GetGapReportErrors];
+
+export type GetGapReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: GapReportResponse;
+};
+
+export type GetGapReportResponse = GetGapReportResponses[keyof GetGapReportResponses];
+
+export type GenerateGapReportData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/gap-report';
+};
+
+export type GenerateGapReportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GenerateGapReportError = GenerateGapReportErrors[keyof GenerateGapReportErrors];
+
+export type GenerateGapReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: GapReportResponse;
+};
+
+export type GenerateGapReportResponse = GenerateGapReportResponses[keyof GenerateGapReportResponses];
