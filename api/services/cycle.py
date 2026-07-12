@@ -109,6 +109,37 @@ def approve_draft(
     )
 
 
+def advance_to_answers_entered(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """APPROVED_PRINTED → ANSWERS_ENTERED.
+
+    Called when the child's submission is persisted successfully.
+    This is a child-action consequence, not a parent approval — no
+    parent_approval_at is recorded (the parent already approved at
+    the APPROVED_PRINTED gate).
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.ANSWERS_ENTERED)
+    return repo.update_cycle_state(cycle_id, CycleState.ANSWERS_ENTERED)
+
+
+def advance_to_auto_marked(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """ANSWERS_ENTERED → AUTO_MARKED.
+
+    Called after grading completes successfully.
+    This is not a child-visible gate — no parent_approval_at recorded here.
+    Parent review of marks happens at the PARENT_REVIEW_MARKS gate (Phase 3).
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.AUTO_MARKED)
+    return repo.update_cycle_state(cycle_id, CycleState.AUTO_MARKED)
+
+
 # ---------------------------------------------------------------------------
 # Internal guard
 # ---------------------------------------------------------------------------

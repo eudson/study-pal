@@ -1,0 +1,74 @@
+/* TextAnswerInput — short_answer, fill_blank (word), extended_response */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.label {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.input {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  /* sticker thick-bottom via box-shadow — consistent approach */
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.input:focus {
+  border-color: var(--teal-500);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--teal-500), 0 0 0 2px var(--teal-100);
+}
+
+.input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Multi-line textarea variant */
+.textarea {
+  composes: input;
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* Fill-blank set: multiple inputs stacked with ordinal labels */
+.blanksSet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.blankRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.blankOrdinal {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+  min-width: 24px;
+  flex-shrink: 0;
+}

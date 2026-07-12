@@ -1,0 +1,160 @@
+/* LabellingBoard — assign term_bank terms to position_ids */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.instructions {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.termBank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.termBankHeading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  width: 100%;
+}
+
+.term {
+  appearance: none;
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-pill);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  padding: var(--sp-2) var(--sp-4);
+  min-height: var(--touch-min);
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.term:active {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+}
+
+.term:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.termSelected {
+  composes: term;
+  background: var(--coral-100);
+  border-color: var(--coral-500);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--coral-600);
+  color: var(--coral-700);
+}
+
+.termSelected:active {
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--coral-600);
+}
+
+/* Positions list */
+.positionsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.positionsHeading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.positionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+  cursor: default;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.positionRow:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.positionRow:active {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+}
+
+.positionId {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  color: var(--text-primary);
+  min-width: 36px;
+  flex-shrink: 0;
+}
+
+.positionValue {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--selected-text);
+}
+
+.positionEmpty {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.positionClear {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--growing);
+  font-size: var(--fs-body);
+  cursor: pointer;
+  padding: var(--sp-1);
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-control);
+}
+
+.positionClear:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.tapHint {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}

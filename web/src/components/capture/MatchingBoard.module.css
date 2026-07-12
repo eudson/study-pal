@@ -1,0 +1,170 @@
+/* MatchingBoard — tap-one-each-side pairing */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.instructions {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+.columnLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: center;
+  padding-bottom: var(--sp-2);
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.linesArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  /* align with first item — uses sp-6 (32px) token */
+  padding-top: var(--sp-6);
+  gap: var(--sp-2);
+}
+
+.item {
+  appearance: none;
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+  padding: var(--sp-2) var(--sp-3);
+  min-height: var(--touch-min);
+  width: 100%;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.item:active {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+}
+
+.item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.itemSelected {
+  composes: item;
+  background: var(--coral-100);
+  border-color: var(--coral-500);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--coral-600);
+  color: var(--coral-700);
+}
+
+.itemSelected:active {
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--coral-600);
+}
+
+.itemPaired {
+  composes: item;
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--selected-border);
+  color: var(--selected-text);
+}
+
+.itemPaired:active {
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--selected-border);
+}
+
+/* Right-side items not yet selectable — soften but keep visible; DESIGN §4 */
+.item:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Pairs list below the columns */
+.pairsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.pairsHeading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.pairRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  background: var(--surface-well);
+  border-radius: var(--r-control);
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.pairLeft {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+}
+
+.pairArrow {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.pairRight {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+}
+
+.pairRemove {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--growing);
+  font-size: var(--fs-body);
+  cursor: pointer;
+  padding: var(--sp-1);
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-control);
+}
+
+.pairRemove:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

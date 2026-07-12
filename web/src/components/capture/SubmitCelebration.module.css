@@ -1,0 +1,134 @@
+/* SubmitCelebration — teacher-stamp moment, DESIGN §4/§5 */
+
+.shell {
+  height: 100dvh;
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-7) var(--sp-5);
+  gap: var(--sp-5);
+  text-align: center;
+}
+
+/* Gold stars — DESIGN §5: springy, gold, effort-reward */
+.stars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+.starCenter {
+  font-size: var(--star-size-lg);
+  line-height: 1;
+  color: var(--gold-500);
+  animation: starPop var(--dur-celebrate) var(--ease-out) 0ms both;
+}
+
+.starLeft {
+  font-size: var(--star-size-sm);
+  line-height: 1;
+  color: var(--gold-500);
+  animation: starPop var(--dur-celebrate) var(--ease-out) 60ms both;
+}
+
+.starRight {
+  font-size: var(--star-size-sm);
+  line-height: 1;
+  color: var(--gold-500);
+  animation: starPop var(--dur-celebrate) var(--ease-out) 120ms both;
+}
+
+@keyframes starPop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Teacher stamp — circle, 3px teal border, rotate(-8deg), Fredoka caption */
+.stamp {
+  width: var(--stamp-size);
+  height: var(--stamp-size);
+  border-radius: 50%;
+  border: var(--stamp-border-w) solid var(--teal-500);
+  background: var(--teal-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-8deg);
+  animation: stampIn var(--dur-celebrate) var(--ease-out) 80ms both;
+}
+
+@keyframes stampIn {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+/* stamp text: never ALL-CAPS on content per §3; this is UI chrome so caps is ok */
+.stampText {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  color: var(--teal-600);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-display);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+  animation: fadeUp var(--dur-celebrate) var(--ease-out) 160ms both;
+}
+
+.subtext {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  max-width: 280px;
+  animation: fadeUp var(--dur-celebrate) var(--ease-out) 220ms both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.doneBtn {
+  width: 100%;
+  max-width: 320px;
+}
+
+/* Honour reduced-motion — no transforms or animations */
+@media (prefers-reduced-motion: reduce) {
+  .stamp,
+  .starLeft,
+  .starCenter,
+  .starRight,
+  .headline,
+  .subtext {
+    animation: none;
+  }
+}

@@ -138,6 +138,84 @@ export type CalculationAnswer = {
 };
 
 /**
+ * ChildAssessmentView
+ *
+ * Full assessment as seen by the child in capture mode.
+ *
+ * Fields present: assessment_id, cycle_id, variant, subject (freeform display),
+ * content_language, grade_label, title, duration_minutes, instructions (public
+ * instructions printed at the top of the paper), declared_total_marks, sections
+ * (ChildSectionView — no answer keys anywhere).
+ *
+ * Fields absent: schema_version (internal), computed_total_marks (internal
+ * duplicate), and every answer/memo field in every question.
+ */
+export type ChildAssessmentView = {
+    /**
+     * Assessment Id
+     */
+    assessment_id: string;
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Variant
+     */
+    variant: string;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Content Language
+     */
+    content_language: string;
+    /**
+     * Grade Label
+     */
+    grade_label: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Duration Minutes
+     */
+    duration_minutes: number;
+    /**
+     * Instructions
+     */
+    instructions: Array<string>;
+    /**
+     * Declared Total Marks
+     */
+    declared_total_marks: number;
+    /**
+     * Sections
+     */
+    sections: Array<ChildSectionView>;
+};
+
+/**
+ * ChildCalculationView
+ *
+ * Calculation — final_answer, method_steps, unit, tolerance, number_sentence excluded.
+ */
+export type ChildCalculationView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Working Lines Hint
+     *
+     * How many working lines to show (from render_hints); not answer info.
+     */
+    working_lines_hint?: number;
+};
+
+/**
  * ChildCreate
  *
  * Create a child.  family_id is derived server-side; never from the client.
@@ -155,6 +233,156 @@ export type ChildCreate = {
      * Initial publish-gate toggle defaults; uses standard defaults when omitted.
      */
     visibility_defaults?: VisibilityDefaults;
+};
+
+/**
+ * ChildExtendedResponseView
+ *
+ * Extended response — model_answer, rubric, required_structure excluded.
+ */
+export type ChildExtendedResponseView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+};
+
+/**
+ * ChildFillBlankView
+ *
+ * Number of blanks + value types only — accepted answers excluded.
+ */
+export type ChildFillBlankView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Blank Count
+     */
+    blank_count: number;
+    /**
+     * Value Types
+     */
+    value_types: Array<string>;
+};
+
+/**
+ * ChildLabellingView
+ *
+ * Diagram labelling — correct labels excluded.
+ *
+ * position_ids: the position numbers as printed.
+ * term_bank: optional word bank (allowed to be shown — it is printed on the paper).
+ * diagram_asset is included so the frontend can display the diagram.
+ * Correct label per position is excluded.
+ */
+export type ChildLabellingView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Position Ids
+     */
+    position_ids: Array<string>;
+    /**
+     * Term Bank
+     */
+    term_bank: Array<string>;
+    /**
+     * Diagram Asset
+     */
+    diagram_asset?: string | null;
+};
+
+/**
+ * ChildMatchingView
+ *
+ * Left and right item lists only — correct_pairs excluded.
+ */
+export type ChildMatchingView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Left
+     */
+    left: Array<string>;
+    /**
+     * Right
+     */
+    right: Array<string>;
+};
+
+/**
+ * ChildMcqView
+ *
+ * MCQ options text only — correct_index and distractor_notes excluded.
+ */
+export type ChildMcqView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Options
+     */
+    options: Array<string>;
+};
+
+/**
+ * ChildOrderingView
+ *
+ * Shuffled items only — correct_order excluded.
+ */
+export type ChildOrderingView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Items
+     */
+    items: Array<string>;
+};
+
+/**
+ * ChildQuestionView
+ *
+ * A single question as visible to the child.
+ *
+ * Fields present: qid, number, text, question_type, marks_total (for display),
+ * render_hints (layout/working lines), answer_view (structure only — NO answers).
+ * Fields absent: answer payload answer keys/accepted values, memo, gap_tags,
+ * difficulty (used internally), grading_path.
+ */
+export type ChildQuestionView = {
+    /**
+     * Qid
+     */
+    qid: string;
+    /**
+     * Number
+     */
+    number: string;
+    /**
+     * Text
+     */
+    text: string;
+    question_type: QuestionType;
+    /**
+     * Marks Total
+     *
+     * Total marks for this question — displayed to child.
+     */
+    marks_total: number;
+    render_hints: RenderHints;
+    /**
+     * Answer View
+     */
+    answer_view: ChildMcqView | ChildTrueFalseView | ChildMatchingView | ChildOrderingView | ChildFillBlankView | ChildShortAnswerView | ChildCalculationView | ChildTableCompletionView | ChildLabellingView | ChildExtendedResponseView;
 };
 
 /**
@@ -186,6 +414,121 @@ export type ChildResponse = {
      */
     archived_at?: string | null;
     visibility_defaults?: VisibilityDefaults;
+};
+
+/**
+ * ChildResponseItem
+ *
+ * One question's response from the child.
+ *
+ * payload is intentionally typed as dict[str, Any] — it is persisted without
+ * interpretation in Phase 1.  Grading (Phase 2) will validate shapes then.
+ */
+export type ChildResponseItem = {
+    /**
+     * Qid
+     */
+    qid: string;
+    /**
+     * Attempted
+     */
+    attempted?: boolean;
+    /**
+     * Payload
+     *
+     * Shape depends on question_type; not interpreted in Phase 1.
+     */
+    payload?: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * ChildSectionView
+ *
+ * A section as visible to the child — full structure, no answer keys.
+ */
+export type ChildSectionView = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Instructions
+     */
+    instructions?: string | null;
+    /**
+     * Declared Marks
+     */
+    declared_marks: number;
+    /**
+     * Questions
+     */
+    questions: Array<ChildQuestionView>;
+};
+
+/**
+ * ChildShortAnswerView
+ *
+ * Short answer — accepted alternatives, required_keywords, marker_guidance excluded.
+ */
+export type ChildShortAnswerView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+};
+
+/**
+ * ChildTableCompletionView
+ *
+ * Table structure only — answer cells excluded.
+ *
+ * row_headers and col_headers are safe (structural); cells accepted values
+ * are stripped.  format_example_row tells the frontend whether to show the
+ * pre-filled example row (layout only, not the answers).
+ */
+export type ChildTableCompletionView = {
+    /**
+     * Kind
+     */
+    kind?: string;
+    /**
+     * Row Headers
+     */
+    row_headers: Array<string>;
+    /**
+     * Col Headers
+     */
+    col_headers: Array<string>;
+    /**
+     * Format Example Row
+     */
+    format_example_row: boolean;
+    /**
+     * Blank Cell Positions
+     *
+     * List of {row, col} dicts identifying which cells the child fills. No accepted-answer info — only cell coordinates.
+     */
+    blank_cell_positions: Array<{
+        [key: string]: number;
+    }>;
+};
+
+/**
+ * ChildTrueFalseView
+ *
+ * True/False question — is_true, requires_correction, corrected_statement excluded.
+ */
+export type ChildTrueFalseView = {
+    /**
+     * Kind
+     */
+    kind?: string;
 };
 
 /**
@@ -293,6 +636,13 @@ export type CycleState = 'SCOPE_UPLOADED' | 'GENERATING_A' | 'PARENT_REVIEWS_DRA
  * Difficulty
  */
 export type Difficulty = 'easy' | 'medium' | 'challenging';
+
+/**
+ * ErrorCategory
+ *
+ * Subject-agnostic error taxonomy for gap reports (ARCHITECTURE.md §6).
+ */
+export type ErrorCategory = 'concept_gap' | 'format_misread' | 'careless' | 'not_attempted';
 
 /**
  * ExtendedResponseAnswer
@@ -417,9 +767,60 @@ export type GenerateAssessmentResponse = {
 };
 
 /**
+ * GradeSubmissionResponse
+ *
+ * Response from POST /cycles/{cycle_id}/grade.
+ */
+export type GradeSubmissionResponse = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    summary: GradingSummary;
+    /**
+     * Marks
+     */
+    marks: Array<QuestionMark>;
+};
+
+/**
  * GradingPath
  */
 export type GradingPath = 'auto' | 'auto_fuzzy' | 'claude_assist';
+
+/**
+ * GradingSummary
+ *
+ * Summary counts returned by POST /cycles/{cycle_id}/grade.
+ */
+export type GradingSummary = {
+    /**
+     * Total Questions
+     */
+    total_questions: number;
+    /**
+     * Auto Marked
+     *
+     * Questions graded by AUTO path, no review needed.
+     */
+    auto_marked: number;
+    /**
+     * Needs Review
+     *
+     * Questions flagged for parent review.
+     */
+    needs_review: number;
+    /**
+     * Not Attempted
+     *
+     * Questions skipped by the child.
+     */
+    not_attempted: number;
+};
 
 /**
  * HTTPValidationError
@@ -477,6 +878,26 @@ export type LabellingAnswer = {
      * Storage path or asset id of the diagram.
      */
     diagram_asset?: string | null;
+};
+
+/**
+ * ListMarksWithContextResponse
+ *
+ * Extended response from GET /cycles/{cycle_id}/marks, with question context.
+ */
+export type ListMarksWithContextResponse = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    /**
+     * Items
+     */
+    items: Array<QuestionMarkWithContext>;
 };
 
 /**
@@ -650,6 +1071,129 @@ export type Question = {
 };
 
 /**
+ * QuestionContext
+ *
+ * Minimal question context attached to a mark for the review screen.
+ *
+ * Carries text/type/mark_rules so the parent can evaluate without
+ * re-fetching the full assessment.
+ */
+export type QuestionContext = {
+    /**
+     * Qid
+     */
+    qid: string;
+    /**
+     * Number
+     */
+    number: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Question Type
+     */
+    question_type: string;
+    /**
+     * Marks Total
+     */
+    marks_total: string;
+    /**
+     * Answer Marks
+     */
+    answer_marks?: string | null;
+    /**
+     * Method Marks
+     */
+    method_marks?: string | null;
+};
+
+/**
+ * QuestionMark
+ *
+ * One graded question — mirrors the question_marks table.
+ *
+ * Rules:
+ * - marks_total, suggested_marks, final_marks are all half-steps (0.5 increments).
+ * - suggested_marks and final_marks must be <= marks_total.
+ * - final_marks is NULL until a parent reviews (Phase 3).
+ * - grading_path is snapshotted at grading time (not re-derived later).
+ * - For AUTO pure-graded questions, final_marks == suggested_marks at grading time.
+ * - For CLAUDE_ASSIST/AUTO_FUZZY non-matches, final_marks stays NULL.
+ */
+export type QuestionMark = {
+    /**
+     * Id
+     */
+    id?: string;
+    /**
+     * Family Id
+     */
+    family_id: string;
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    /**
+     * Question Id
+     */
+    question_id: string;
+    /**
+     * Marks Total
+     */
+    marks_total: string;
+    /**
+     * Suggested Marks
+     */
+    suggested_marks: string;
+    /**
+     * Final Marks
+     */
+    final_marks?: string | null;
+    grading_path: GradingPath;
+    /**
+     * Confidence
+     */
+    confidence?: string | null;
+    /**
+     * Needs Review
+     */
+    needs_review: boolean;
+    /**
+     * Ai Rationale
+     */
+    ai_rationale?: string | null;
+    /**
+     * Matched Alternative
+     */
+    matched_alternative?: string | null;
+    error_category?: ErrorCategory | null;
+    /**
+     * Reviewed At
+     */
+    reviewed_at?: string | null;
+    /**
+     * Overridden At
+     */
+    overridden_at?: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+};
+
+/**
+ * QuestionMarkWithContext
+ *
+ * QuestionMark + its question context, for Phase 3 review.
+ */
+export type QuestionMarkWithContext = {
+    mark: QuestionMark;
+    question: QuestionContext;
+};
+
+/**
  * QuestionType
  */
 export type QuestionType = 'mcq' | 'true_false' | 'matching' | 'ordering' | 'fill_blank' | 'short_answer' | 'calculation' | 'table_completion' | 'labelling' | 'extended_response';
@@ -803,6 +1347,66 @@ export type SubjectResponse = {
     content_language: string;
     /**
      * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * SubmissionCreate
+ *
+ * POST body for POST /cycles/{cycle_id}/submissions.
+ */
+export type SubmissionCreate = {
+    /**
+     * Child Id
+     */
+    child_id: string;
+    /**
+     * Responses
+     */
+    responses: Array<ChildResponseItem>;
+    /**
+     * Proof Photo Paths
+     *
+     * Supabase Storage paths, supplied by the client for audit purposes only. NEVER used in grading (ARCHITECTURE.md §10 no-vision-grading decision). Not fetched or validated server-side this phase.
+     */
+    proof_photo_paths?: Array<string>;
+};
+
+/**
+ * SubmissionResponse
+ *
+ * Response from POST /cycles/{cycle_id}/submissions.
+ */
+export type SubmissionResponse = {
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    /**
+     * Assessment Id
+     */
+    assessment_id: string;
+    /**
+     * Child Id
+     */
+    child_id: string;
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Responses Count
+     */
+    responses_count: number;
+    /**
+     * Proof Photo Paths
+     */
+    proof_photo_paths: Array<string>;
+    /**
+     * Created At
+     *
+     * ISO 8601 UTC timestamp.
      */
     created_at: string;
 };
@@ -1591,3 +2195,123 @@ export type ApproveCycleDraftResponses = {
 };
 
 export type ApproveCycleDraftResponse = ApproveCycleDraftResponses[keyof ApproveCycleDraftResponses];
+
+export type GetCaptureViewData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/capture';
+};
+
+export type GetCaptureViewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetCaptureViewError = GetCaptureViewErrors[keyof GetCaptureViewErrors];
+
+export type GetCaptureViewResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChildAssessmentView;
+};
+
+export type GetCaptureViewResponse = GetCaptureViewResponses[keyof GetCaptureViewResponses];
+
+export type CreateSubmissionData = {
+    body: SubmissionCreate;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/submissions';
+};
+
+export type CreateSubmissionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateSubmissionError = CreateSubmissionErrors[keyof CreateSubmissionErrors];
+
+export type CreateSubmissionResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubmissionResponse;
+};
+
+export type CreateSubmissionResponse = CreateSubmissionResponses[keyof CreateSubmissionResponses];
+
+export type GradeSubmissionMarksData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/grade';
+};
+
+export type GradeSubmissionMarksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GradeSubmissionMarksError = GradeSubmissionMarksErrors[keyof GradeSubmissionMarksErrors];
+
+export type GradeSubmissionMarksResponses = {
+    /**
+     * Successful Response
+     */
+    200: GradeSubmissionResponse;
+};
+
+export type GradeSubmissionMarksResponse = GradeSubmissionMarksResponses[keyof GradeSubmissionMarksResponses];
+
+export type ListQuestionMarksData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/marks';
+};
+
+export type ListQuestionMarksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListQuestionMarksError = ListQuestionMarksErrors[keyof ListQuestionMarksErrors];
+
+export type ListQuestionMarksResponses = {
+    /**
+     * Successful Response
+     */
+    200: ListMarksWithContextResponse;
+};
+
+export type ListQuestionMarksResponse = ListQuestionMarksResponses[keyof ListQuestionMarksResponses];

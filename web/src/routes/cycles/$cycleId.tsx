@@ -113,6 +113,16 @@ function CycleDetailPage() {
     );
   }
 
+  // APPROVED_PRINTED → show "Enter answers" action to hand device to child
+  if (cycle.state === "APPROVED_PRINTED" || cycle.state === "ANSWERS_ENTERED") {
+    return (
+      <ApprovedPrintedPage
+        cycle={cycle}
+        cycleId={cycleId}
+      />
+    );
+  }
+
   if (screenView) {
     return (
       <ScreenViewPage
@@ -137,6 +147,65 @@ function CycleDetailPage() {
       approveError={approveError}
       regenError={regenError}
     />
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// Approved & printed — hand device to child
+// ────────────────────────────────────────────────────────
+
+interface ApprovedPrintedPageProps {
+  cycle: CycleResponse;
+  cycleId: string;
+}
+
+function ApprovedPrintedPage({ cycle, cycleId }: ApprovedPrintedPageProps) {
+  const navigate = useNavigate();
+  const isAnswered = cycle.state === "ANSWERS_ENTERED";
+
+  return (
+    <div className={styles.shell}>
+      <div className={styles.draftHeader}>
+        <div className={styles.draftHeaderLeft}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            aria-label="Back"
+            onClick={() => void navigate({ to: "/" })}
+          >
+            ‹
+          </button>
+          <div className={styles.pageTitle}>
+            {isAnswered ? "Answers entered" : "Ready to answer"}
+          </div>
+        </div>
+        <Chip variant={isAnswered ? "teal" : "gold"}>
+          {isAnswered ? "Answers entered" : "Approved"}
+        </Chip>
+      </div>
+
+      <p className={styles.draftSubtext}>
+        {isAnswered
+          ? "Your child has submitted their answers. You can review them once grading is complete."
+          : "The test has been approved and printed. When your child is ready, tap below to start entering answers."}
+      </p>
+
+      {!isAnswered && (
+        <div className={styles.actionStack}>
+          <StickerButton
+            className={styles.ctaFull}
+            onClick={() =>
+              void navigate({
+                to: "/capture/$cycleId",
+                params: { cycleId },
+              })
+            }
+          >
+            Enter answers
+          </StickerButton>
+        </div>
+      )}
+    </div>
   );
 }
 

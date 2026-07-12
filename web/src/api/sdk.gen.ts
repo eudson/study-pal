@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetHealthData, GetHealthResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListSubjectsData, ListSubjectsResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetHealthData, GetHealthResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -245,4 +245,86 @@ export const approveCycleDraft = <ThrowOnError extends boolean = false>(options:
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Return the memo-free child view of the approved assessment (cycle must be APPROVED_PRINTED).
+ *
+ * Serve the Variant-A assessment to the child in kiosk mode.
+ *
+ * Guards:
+ * - Cycle exists in the caller's family (RLS enforced in repo layer).
+ * - Cycle is in APPROVED_PRINTED — nothing is visible before parent approval
+ * (golden rule 8).
+ * - Assessment for this cycle exists (generation must have completed).
+ *
+ * Returns a ``ChildAssessmentView`` that contains NO answer keys, memo text,
+ * method notes, accepted alternatives, or any other information that would
+ * reveal the answers.
+ */
+export const getCaptureView = <ThrowOnError extends boolean = false>(options: Options<GetCaptureViewData, ThrowOnError>): RequestResult<GetCaptureViewResponses, GetCaptureViewErrors, ThrowOnError> => (options.client ?? client).get<GetCaptureViewResponses, GetCaptureViewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/capture',
+    ...options
+});
+
+/**
+ * Submit child answers; advances cycle APPROVED_PRINTED → ANSWERS_ENTERED.
+ *
+ * Accept the child's responses and persist the submission.
+ *
+ * Server-side guards (none of these trust any client flag):
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Cycle is in APPROVED_PRINTED.
+ * 3. body.child_id matches the cycle → subject → child_id chain.
+ * 4. All qids in body.responses belong to the assessment.
+ *
+ * On success:
+ * - Submission is persisted via SubmissionRepository.
+ * - Cycle advances APPROVED_PRINTED → ANSWERS_ENTERED via cycle service.
+ *
+ * Grading is NOT triggered here (Phase 2).
+ * proof_photo_paths are stored as-is; NEVER fed to grading (§10).
+ */
+export const createSubmission = <ThrowOnError extends boolean = false>(options: Options<CreateSubmissionData, ThrowOnError>): RequestResult<CreateSubmissionResponses, CreateSubmissionErrors, ThrowOnError> => (options.client ?? client).post<CreateSubmissionResponses, CreateSubmissionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/submissions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Grade the cycle's submission; upserts question_marks and advances cycle ANSWERS_ENTERED → AUTO_MARKED.
+ *
+ * Grade the submission and upsert marks.
+ *
+ * Guards:
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Cycle is in ANSWERS_ENTERED or AUTO_MARKED (idempotent re-grade).
+ * 3. Submission exists for the cycle.
+ * 4. Assessment exists for the cycle.
+ *
+ * Proof photos are NEVER read (ARCHITECTURE.md §10).
+ */
+export const gradeSubmissionMarks = <ThrowOnError extends boolean = false>(options: Options<GradeSubmissionMarksData, ThrowOnError>): RequestResult<GradeSubmissionMarksResponses, GradeSubmissionMarksErrors, ThrowOnError> => (options.client ?? client).post<GradeSubmissionMarksResponses, GradeSubmissionMarksErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/grade',
+    ...options
+});
+
+/**
+ * List all question marks for the cycle, with question context for parent review.
+ *
+ * Return all marks for the cycle's submission.
+ *
+ * Includes question context (text, type, mark_rules) so the parent review
+ * screen (Phase 3) can render each mark without re-fetching the assessment.
+ */
+export const listQuestionMarks = <ThrowOnError extends boolean = false>(options: Options<ListQuestionMarksData, ThrowOnError>): RequestResult<ListQuestionMarksResponses, ListQuestionMarksErrors, ThrowOnError> => (options.client ?? client).get<ListQuestionMarksResponses, ListQuestionMarksErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/marks',
+    ...options
 });

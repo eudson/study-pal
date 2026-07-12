@@ -42,7 +42,7 @@
 
 /* press / active — sticker pushes in */
 .root:active:not(:disabled) {
-  transform: translateY(2px);
+  transform: translateY(var(--sticker-edge-pressed));
   box-shadow:
     0 var(--sticker-edge-pressed) 0 0 var(--action-edge);
 }

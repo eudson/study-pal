@@ -1,0 +1,45 @@
+/* SkipControl — always present, never shaming. DESIGN §4/§7.
+   Dashed paper-400 border; "Skip for now" copy.
+   Skipped state: teal dashed border to confirm without shaming. */
+
+.skip {
+  appearance: none;
+  background: transparent;
+  border: var(--skip-border);
+  border-radius: var(--r-control);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+  padding: var(--sp-3) var(--sp-5);
+  min-height: var(--touch-min);
+  width: 100%;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.skip:hover {
+  border-color: var(--paper-300);
+  color: var(--text-secondary);
+}
+
+.skip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Skipped confirmation — teal dashed, gentle not punishing */
+.skipSkipped {
+  composes: skip;
+  border-color: var(--teal-500);
+  color: var(--teal-600);
+  background: var(--teal-100);
+}
+
+.skipSkipped:hover {
+  border-color: var(--teal-600);
+  color: var(--teal-700);
+}

@@ -1,0 +1,87 @@
+/* OrderingList — reorder items with big handles */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.instructions {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.position {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  color: var(--text-muted);
+  min-width: 28px;
+  flex-shrink: 0;
+}
+
+.text {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+}
+
+.moveGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.moveBtn {
+  appearance: none;
+  background: var(--surface-well);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  color: var(--text-secondary);
+  cursor: pointer;
+  /* ≥48px touch target in child mode — DESIGN §5 */
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.moveBtn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.moveBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.moveBtn:active:not(:disabled) {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+  background: var(--paper-200);
+}

@@ -9,6 +9,7 @@ import uuid
 from datetime import UTC, datetime
 
 from schemas.assessment_schema import Assessment
+from schemas.capture import SubmissionCreate, SubmissionResponse
 from schemas.family import (
     ChildResponse,
     ChildUpdate,
@@ -18,6 +19,7 @@ from schemas.family import (
     SubjectResponse,
     VisibilityDefaults,
 )
+from schemas.grading import QuestionMark
 
 
 def _now() -> datetime:
@@ -218,3 +220,68 @@ class InMemoryFamilyRepository:
         )
         self._cycles[cycle_id] = updated
         return updated
+
+
+class InMemorySubmissionRepository:
+    """Process-local submission store for unit tests (no Postgres required)."""
+
+    def __init__(self) -> None:
+        self._store: dict[uuid.UUID, SubmissionResponse] = {}
+
+    def create_submission(
+        self,
+        family_id: uuid.UUID,  # noqa: ARG002 — stored implicitly via RLS in Postgres
+        assessment_id: str,
+        payload: SubmissionCreate,
+        cycle_id: uuid.UUID,
+    ) -> SubmissionResponse:
+        submission_id = uuid.uuid4()
+        response = SubmissionResponse(
+            submission_id=submission_id,
+            assessment_id=assessment_id,
+            child_id=payload.child_id,
+            cycle_id=cycle_id,
+            responses_count=len(payload.responses),
+            proof_photo_paths=list(payload.proof_photo_paths),
+            created_at=_now().isoformat(),
+        )
+        self._store[submission_id] = response
+        return response
+
+    def get_submission(self, submission_id: uuid.UUID) -> SubmissionResponse | None:
+        return self._store.get(submission_id)
+
+
+class InMemoryQuestionMarkRepository:
+    """Process-local question mark store for unit tests (no Postgres required)."""
+
+    def __init__(self) -> None:
+        # Keyed by (submission_id, question_id) for upsert semantics.
+        self._store: dict[tuple[uuid.UUID, str], QuestionMark] = {}
+
+    def bulk_upsert(
+        self,
+        family_id: uuid.UUID,  # noqa: ARG002 — used by Postgres tier for RLS
+        submission_id: uuid.UUID,
+        marks: list[QuestionMark],
+    ) -> list[QuestionMark]:
+        now = _now()
+        persisted: list[QuestionMark] = []
+        for mark in marks:
+            updated = mark.model_copy(update={"created_at": mark.created_at or now})
+            self._store[(submission_id, mark.question_id)] = updated
+            persisted.append(updated)
+        return persisted
+
+    def list_for_submission(self, submission_id: uuid.UUID) -> list[QuestionMark]:
+        return [m for (sid, _qid), m in self._store.items() if sid == submission_id]
+
+    def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]:  # noqa: ARG002
+        # In-memory: we can't join through assessments, so return all marks.
+        # Tests that need cycle-level isolation should use Postgres.
+        return list(self._store.values())
+
+    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None:  # noqa: ARG002
+        # Not meaningfully implementable without the relational join.
+        # Tests that need this should use Postgres or pass submission_id directly.
+        return None

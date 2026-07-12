@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as CyclesNewRouteImport } from './routes/cycles/new'
 import { Route as CyclesCycleIdRouteImport } from './routes/cycles/$cycleId'
+import { Route as CaptureCycleIdRouteImport } from './routes/capture/$cycleId'
 import { Route as SettingsChildrenNewRouteImport } from './routes/settings/children/new'
 import { Route as SettingsChildrenChildIdRouteImport } from './routes/settings/children/$childId'
 
@@ -36,6 +37,11 @@ const CyclesCycleIdRoute = CyclesCycleIdRouteImport.update({
   path: '/cycles/$cycleId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CaptureCycleIdRoute = CaptureCycleIdRouteImport.update({
+  id: '/capture/$cycleId',
+  path: '/capture/$cycleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsChildrenNewRoute = SettingsChildrenNewRouteImport.update({
   id: '/settings/children/new',
   path: '/settings/children/new',
@@ -49,6 +55,7 @@ const SettingsChildrenChildIdRoute = SettingsChildrenChildIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/capture/$cycleId': typeof CaptureCycleIdRoute
   '/cycles/$cycleId': typeof CyclesCycleIdRoute
   '/cycles/new': typeof CyclesNewRoute
   '/settings/': typeof SettingsIndexRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/capture/$cycleId': typeof CaptureCycleIdRoute
   '/cycles/$cycleId': typeof CyclesCycleIdRoute
   '/cycles/new': typeof CyclesNewRoute
   '/settings': typeof SettingsIndexRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/capture/$cycleId': typeof CaptureCycleIdRoute
   '/cycles/$cycleId': typeof CyclesCycleIdRoute
   '/cycles/new': typeof CyclesNewRoute
   '/settings/': typeof SettingsIndexRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/capture/$cycleId'
     | '/cycles/$cycleId'
     | '/cycles/new'
     | '/settings/'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/capture/$cycleId'
     | '/cycles/$cycleId'
     | '/cycles/new'
     | '/settings'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/capture/$cycleId'
     | '/cycles/$cycleId'
     | '/cycles/new'
     | '/settings/'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CaptureCycleIdRoute: typeof CaptureCycleIdRoute
   CyclesCycleIdRoute: typeof CyclesCycleIdRoute
   CyclesNewRoute: typeof CyclesNewRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
@@ -138,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CyclesCycleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/capture/$cycleId': {
+      id: '/capture/$cycleId'
+      path: '/capture/$cycleId'
+      fullPath: '/capture/$cycleId'
+      preLoaderRoute: typeof CaptureCycleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/children/new': {
       id: '/settings/children/new'
       path: '/settings/children/new'
@@ -157,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CaptureCycleIdRoute: CaptureCycleIdRoute,
   CyclesCycleIdRoute: CyclesCycleIdRoute,
   CyclesNewRoute: CyclesNewRoute,
   SettingsIndexRoute: SettingsIndexRoute,

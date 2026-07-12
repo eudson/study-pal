@@ -1,0 +1,79 @@
+/* OptionGrid — MCQ and true/false options.
+   Sticker treatment on each option; selected = teal fill. */
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.option {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  /* box-shadow approach for thick bottom edge — consistent with StickerButton */
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.option:active {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+}
+
+.option:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Selected state — teal fill + teal outline per DESIGN §4 */
+.optionSelected {
+  composes: option;
+  background: var(--selected-bg);
+  border-color: var(--selected-border);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--selected-border);
+  color: var(--selected-text);
+}
+
+.optionSelected:active {
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--selected-border);
+}
+
+.optionLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  min-width: 28px;
+  flex-shrink: 0;
+}
+
+.optionText {
+  flex: 1;
+}
+
+/* Tick — confirms selection beyond colour; DESIGN §4 + §8 */
+.optionTick {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h3);
+  color: var(--selected-text);
+  flex-shrink: 0;
+  line-height: 1;
+}

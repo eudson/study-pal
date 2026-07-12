@@ -1,0 +1,73 @@
+/* TableGrid — table_completion with pre-completed example row */
+
+.wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.instructions {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--sp-3);
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+}
+
+.th {
+  background: var(--surface-well);
+  border: 1px solid var(--border-hairline);
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tdExample {
+  border: 1px solid var(--border-hairline);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--gold-100);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-style: italic;
+}
+
+.td {
+  border: 1px solid var(--border-hairline);
+  padding: var(--sp-1);
+  background: var(--surface-raised);
+}
+
+.cellInput {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: var(--sp-1) var(--sp-2);
+  width: 100%;
+  /* token-based touch target — DESIGN §5/§8 */
+  min-height: var(--touch-min);
+  box-sizing: border-box;
+}
+
+.cellInput:focus {
+  background: var(--teal-100);
+  border-radius: var(--r-control);
+}
+
+.cellInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--r-control);
+}

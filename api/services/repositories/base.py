@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from schemas.assessment_schema import Assessment
+from schemas.capture import SubmissionCreate, SubmissionResponse
 from schemas.family import (
     ChildResponse,
     ChildUpdate,
@@ -21,6 +22,7 @@ from schemas.family import (
     SubjectResponse,
     VisibilityDefaults,
 )
+from schemas.grading import QuestionMark
 
 
 @runtime_checkable
@@ -115,3 +117,52 @@ class FamilyRepository(Protocol):
         parent_approval_at: datetime | None = None,
         parent_approval_note: str | None = None,
     ) -> CycleResponse: ...
+
+
+@runtime_checkable
+class SubmissionRepository(Protocol):
+    """Persistence for child answer submissions.
+
+    family_id is NEVER accepted from the client — resolved server-side via RLS.
+    """
+
+    def create_submission(
+        self,
+        family_id: uuid.UUID,
+        assessment_id: str,
+        payload: SubmissionCreate,
+        cycle_id: uuid.UUID,
+    ) -> SubmissionResponse:
+        """Persist a new submission and return the response model.
+
+        ``proof_photo_paths`` are stored as-is; they are NEVER fed to grading.
+        """
+        ...
+
+    def get_submission(self, submission_id: uuid.UUID) -> SubmissionResponse | None: ...
+
+
+@runtime_checkable
+class QuestionMarkRepository(Protocol):
+    """Persistence for graded question marks.
+
+    family_id is NEVER accepted from the client — resolved server-side.
+    """
+
+    def bulk_upsert(
+        self,
+        family_id: uuid.UUID,
+        submission_id: uuid.UUID,
+        marks: list[QuestionMark],
+    ) -> list[QuestionMark]:
+        """Upsert all marks for a submission.
+
+        Re-grading replaces stale marks via the (submission_id, question_id) unique key.
+        """
+        ...
+
+    def list_for_submission(self, submission_id: uuid.UUID) -> list[QuestionMark]: ...
+
+    def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]: ...
+
+    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None: ...

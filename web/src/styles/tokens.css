@@ -132,6 +132,18 @@
   /* ---------- touch & density ---------- */
   --touch-min: 44px;
 
+  /* ---------- celebration / reward sizes ---------- */
+  /* Used only in child-mode celebration moments (SubmitCelebration).
+     Not palette/font values — decorative icon dimensions. */
+  --star-size-lg: 48px;   /* centre star in three-star award */
+  --star-size-sm: 32px;   /* flanking stars */
+  --stamp-size: 120px;    /* teacher stamp circle diameter */
+  --progress-track-h: 8px; /* progress bar track height */
+  --icon-size-xl: 36px;    /* large decorative icons (camera, etc.) */
+  --stamp-border-w: 3px;   /* teacher stamp ring width — DESIGN §4 */
+  --numpad-key-h: 56px;    /* number pad key height — larger than touch-min for calculator UX */
+  --textarea-min-h: 80px;  /* minimum height for working/response textareas */
+
   /* ---------- motion ---------- */
   --dur-fast: 120ms;
   --dur-base: 200ms;

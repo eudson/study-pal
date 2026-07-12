@@ -1,0 +1,121 @@
+/* NumberPad — calculation answer + numeric fill_blank */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.displayRow {
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: var(--fw-display);
+  color: var(--text-primary);
+  min-height: var(--numpad-key-h);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.displayValue {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.displayPlaceholder {
+  flex: 1;
+  color: var(--text-muted);
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-display-md);
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-2);
+}
+
+.key {
+  appearance: none;
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+  /* --numpad-key-h: larger than --touch-min for number pad comfort on iPad */
+  min-height: var(--numpad-key-h);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.key:active {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+}
+
+.key:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.keyDelete {
+  composes: key;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+}
+
+.keySpecial {
+  composes: key;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+/* Working text area (calculation only) */
+.workingLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.workingInput {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  width: 100%;
+  min-height: var(--textarea-min-h);
+  box-sizing: border-box;
+  resize: none;
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.workingInput:focus {
+  border-color: var(--teal-500);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--teal-500), 0 0 0 2px var(--teal-100);
+}
+
+.workingInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

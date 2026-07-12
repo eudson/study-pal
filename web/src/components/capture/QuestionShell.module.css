@@ -1,0 +1,175 @@
+/* QuestionShell — child-mode chrome: progress bar + counter + marks badge.
+   All values from tokens only. */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--canvas);
+  overflow: hidden;
+}
+
+/* ── top chrome ── */
+.topChrome {
+  flex-shrink: 0;
+  padding: var(--sp-4) var(--sp-5) var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+/* Star counter — child game chrome, DESIGN §5 */
+.starCounter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.starIcon {
+  font-size: var(--fs-h2);
+  line-height: 1;
+  color: var(--gold-500);
+  /* pop in when questions are answered */
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.starCount {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-body);
+  color: var(--gold-600);
+  white-space: nowrap;
+}
+
+.marksBadge {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-body);
+  color: var(--ink-900);
+  background: var(--gold-100);
+  border: var(--sticker-border-w) solid var(--gold-500);
+  border-radius: var(--r-pill);
+  padding: var(--sp-1) var(--sp-3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Progress bar track + fill */
+.progressTrack {
+  height: var(--progress-track-h);
+  background: var(--paper-200);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--gold-500);
+  border-radius: var(--r-pill);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+/* ── question body (scrollable) ── */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.sectionLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  /* never ALL-CAPS on data-sourced content — DESIGN §3/§7 */
+}
+
+.questionText {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+}
+
+.inputArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* ── bottom chrome (skip + nav) ── */
+.bottomChrome {
+  flex-shrink: 0;
+  padding: var(--sp-4) var(--sp-5) var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--canvas);
+  /* subtle separator from scrolling body */
+  border-top: 1px solid var(--border-hairline);
+}
+
+.navRow {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.navBtn {
+  appearance: none;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  /* use box-shadow for thick bottom edge — same approach as StickerButton */
+  border: var(--sticker-border-w) solid var(--ink-900);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--ink-900);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-5);
+  min-height: var(--touch-min);
+  cursor: pointer;
+  flex: 1;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.navBtn:active:not(:disabled) {
+  transform: translateY(var(--sticker-edge-pressed));
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--ink-900);
+}
+
+.navBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.navBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.navBtnPrimary {
+  composes: navBtn;
+  background: var(--action);
+  color: var(--text-on-action);
+  border-color: var(--action-edge);
+  box-shadow: 0 var(--sticker-edge-w) 0 0 var(--action-edge);
+  flex: 2;
+}
+
+.navBtnPrimary:active:not(:disabled) {
+  box-shadow: 0 var(--sticker-edge-pressed) 0 0 var(--action-edge);
+}
