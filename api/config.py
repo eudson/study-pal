@@ -32,11 +32,21 @@ class Settings(BaseSettings):
     # PR-2 will swap this for the real Supabase DSN via env.
     db_dsn: str = "postgresql://studypal:studypal@localhost:5432/studypal"
 
-    # Auth stub — in PR-1 a request header injects the user_id; PR-2 replaces
-    # this with real JWKS JWT verification.  deny_when_no_identity = True means
-    # the stub returns 401 when no X-User-Id header is present (deny-by-default).
+    # Auth stub — the credential-free path. A request header injects the user_id
+    # for local/test.  deny_when_no_identity = True means the stub returns 401
+    # when no X-User-Id header is present (deny-by-default).
     stub_auth_header: str = "x-user-id"
     deny_when_no_identity: bool = True
+
+    # Auth (real) — Supabase JWKS JWT verification.  When supabase_jwks_url is
+    # set, get_identity requires a valid Bearer JWT and the X-User-Id stub is
+    # ignored entirely (production posture).  When empty, the stub path applies
+    # (local / test / credential-free).  Asymmetric algorithms ONLY — HS256 is
+    # never accepted, which forecloses the JWKS public-key alg-confusion attack.
+    supabase_jwks_url: str = ""
+    supabase_jwt_iss: str = ""
+    supabase_jwt_aud: str = "authenticated"
+    supabase_jwt_algorithms: list[str] = ["ES256", "RS256", "EdDSA"]
 
     # Generation caps — guard against cost-DoS (invariant 7).
     max_scope_chars: int = 8_000

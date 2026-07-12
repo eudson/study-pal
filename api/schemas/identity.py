@@ -15,19 +15,24 @@ from pydantic import BaseModel, field_validator
 
 
 class Identity(BaseModel):
-    """Verified caller identity.  Carries the user_id and resolved family_id.
+    """Verified caller identity.  ``user_id`` is the only value the request
+    path needs — the DB resolves tenancy from it via RLS (the family_members
+    join, ARCHITECTURE §10 R1), so ``family_id`` is never threaded into queries.
 
-    In PR-1 both values come from the stub header / config default.
-    In PR-2 both are derived from the verified JWT (user_id from ``sub``,
-    family_id resolved via the family_members join at auth time or left to RLS).
+    - Stub path (local/test): ``user_id`` and ``family_id`` come from the
+      ``X-User-Id: <user_id>/<family_id>`` header.
+    - JWKS path (production): ``user_id`` is the verified JWT ``sub``; a Supabase
+      token carries no family, so ``family_id`` stays ``None`` and RLS resolves it.
     """
 
     user_id: uuid.UUID
-    family_id: uuid.UUID
+    family_id: uuid.UUID | None = None
 
     @field_validator("user_id", "family_id", mode="before")
     @classmethod
-    def _coerce_uuid(cls, v: object) -> uuid.UUID:
+    def _coerce_uuid(cls, v: object) -> uuid.UUID | None:
+        if v is None:
+            return None
         if isinstance(v, uuid.UUID):
             return v
         if isinstance(v, str):

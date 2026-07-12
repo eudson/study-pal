@@ -52,7 +52,7 @@ export const validateAssessment = <ThrowOnError extends boolean = false>(options
  * (HTTP 422 with issues list).
  */
 export const generateAssessment = <ThrowOnError extends boolean = false>(options: Options<GenerateAssessmentData, ThrowOnError>): RequestResult<GenerateAssessmentResponses, GenerateAssessmentErrors, ThrowOnError> => (options.client ?? client).post<GenerateAssessmentResponses, GenerateAssessmentErrors, ThrowOnError>({
-    security: [{ name: 'x-user-id', type: 'apiKey' }],
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
     url: '/assessments/generate',
     ...options,
     headers: {

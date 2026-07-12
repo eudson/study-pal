@@ -14,10 +14,10 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from config import get_settings
-from services.auth import get_identity
+from services.auth import identity_from_stub_header
 
 # ---------------------------------------------------------------------------
-# Unit tests for get_identity()
+# Unit tests for the stub identity parser (credential-free path)
 # ---------------------------------------------------------------------------
 
 
@@ -26,31 +26,31 @@ class TestGetIdentityUnit:
         user_id = uuid.uuid4()
         family_id = uuid.uuid4()
         header = f"{user_id}/{family_id}"
-        identity = get_identity(raw_header=header, settings=get_settings())
+        identity = identity_from_stub_header(header, get_settings())
         assert identity.user_id == user_id
         assert identity.family_id == family_id
 
     def test_missing_header_raises_401(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            get_identity(raw_header=None, settings=get_settings())
+            identity_from_stub_header(None, get_settings())
         assert exc.value.status_code == 401
 
     def test_malformed_header_no_slash_raises_401(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            get_identity(raw_header=str(uuid.uuid4()), settings=get_settings())
+            identity_from_stub_header(str(uuid.uuid4()), get_settings())
         assert exc.value.status_code == 401
 
     def test_invalid_uuid_raises_401(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            get_identity(raw_header="not-a-uuid/also-not-a-uuid", settings=get_settings())
+            identity_from_stub_header("not-a-uuid/also-not-a-uuid", get_settings())
         assert exc.value.status_code == 401
 
     def test_three_slash_parts_raises_401(self) -> None:
         """Three segments (extra slash) is rejected."""
         with pytest.raises(HTTPException) as exc:
-            get_identity(
-                raw_header=f"{uuid.uuid4()}/{uuid.uuid4()}/{uuid.uuid4()}",
-                settings=get_settings(),
+            identity_from_stub_header(
+                f"{uuid.uuid4()}/{uuid.uuid4()}/{uuid.uuid4()}",
+                get_settings(),
             )
         assert exc.value.status_code == 401
 

@@ -59,3 +59,75 @@ frontend agent, root tooling + verification by the orchestrator.
   - **Fixture hardening** — Maths (calculation/method marks) + Afrikaans
     (non-English content language) as the first schema stressors.
 - Single-container reverse proxy deferred to deploy.
+
+---
+
+## 2026-07-12 — PR-2: RLS on real Supabase + CI gate + JWKS auth
+
+Context: PR-1 (persistence + RLS + generation, credential-free) landed earlier
+(commit `f152b7f`); the Supabase project was created and `.env` wired. This
+session took PR-2 from "db is wired" to real tenant isolation + real auth.
+
+**What shipped**
+- **RLS adapted to real Supabase.** `0002_rls.sql` made portable: the local
+  auth-emulation preamble (`CREATE ROLE authenticated`, `auth` schema,
+  `auth.uid()`, auth grants) is now guarded behind `IF NOT EXISTS (auth.uid())`.
+  Real Supabase supplies those (`auth.uid()` owned by `supabase_auth_admin`,
+  which our `postgres` role cannot `CREATE OR REPLACE`), so on Supabase the
+  preamble is skipped and only the RLS grants + `family_members`-join policies
+  apply; a bare local Postgres still gets the emulation. Idempotent, forward-only
+  (§10 R4). No `0003` needed — 0002 was unapplied on the real target and would
+  otherwise error mid-`make migrate`.
+- **Migrations applied to the live project.** Ledger `0001_spine,0002_rls`;
+  `auth.uid()` untouched; RLS `ENABLE`+`FORCE` on all 7 tenant tables, 25
+  policies. Reconnaissance confirmed `postgres` has `bypassrls=true` (owner path)
+  and `authenticated` has `bypassrls=false` — the §10 R1 model exactly.
+- **`make migrate` DSN precedence** (`MIGRATE_DSN > STUDYPAL_DB_DSN > DB_DSN >
+  local default`) so it uses the session pooler by default. The Supabase DIRECT
+  host (`db.<ref>.supabase.co`) is **IPv6-only** and unreachable from IPv4-only
+  networks; the session pooler (`:5432`, session mode) is the DDL-capable IPv4
+  path. Documented in Makefile + `.env(.example)`.
+- **CI RLS gate.** The `api` job gained a `postgres:17` service + job-level
+  `STUDYPAL_DB_DSN` + a `make migrate` step, so the 15-test RLS isolation tier
+  runs on every push instead of skipping (bare Postgres → 0002's emulation path,
+  mirroring the docker `db` service).
+- **Real JWKS JWT verification (backend).** Dual-mode `get_identity`: when
+  `STUDYPAL_SUPABASE_JWKS_URL` is set it requires a `Bearer` JWT and verifies
+  sig/iss/aud/exp against Supabase's JWKS (project uses **ES256**), taking
+  `user_id` from the verified `sub`; otherwise the `X-User-Id` stub applies
+  (local/test/credential-free). Asymmetric-only (HS* refused → no alg-confusion),
+  fail-closed on every error, prod-misconfig guard (stub disabled outside
+  dev/test/local/ci). `Identity.family_id` made optional (token carries no
+  family; RLS resolves tenancy from `user_id`). Added `pyjwt[crypto]`.
+
+**Verification**
+- `make lint` — clean (ruff + `ruff format --check` + mypy strict on api; tsc
+  strict + eslint on web).
+- `make test` — 94 passed, 15 RLS skipped locally (no DB in that run),
+  2 fixture-gate deselected. New `test_auth_jwks.py`: valid / expired /
+  wrong-iss / wrong-aud / bad-sig / alg-confusion / missing-exp / non-uuid-sub /
+  unresolvable-key / dual-mode wiring / prod-guard / end-to-end through
+  `/assessments/generate`.
+- **RLS tier against real Supabase: 15/15 green** (cross-tenant isolation both
+  ways, deny-by-default, non-privileged role can't DROP/CREATE, promoted-column
+  round-trip, `family_members` self-view). Test data cleaned up; DB left empty.
+- **CI path reproduced locally** against an ephemeral `postgres:17`: emulation
+  applied, 25 policies, 15/15 green.
+- **Real-JWKS smoke**: `PyJWKClient` fetches the live ES256 signing key.
+- `make codegen` — regenerated `web/src/api/sdk.gen.ts` (generate endpoint now
+  advertises Bearer + x-user-id); zero further drift.
+- **Fixtures**: untouched/unexercised (no generation/grading/PDF changes here).
+
+**What's next / deferred**
+- `ARCHITECT DECISION NEEDED`: none blocking. Confirm the Supabase project
+  **region** was chosen deliberately for SA child data (POPIA).
+- **SPA Google Sign-In shell** (frontend half of auth B) — needed to mint a real
+  Supabase token and prove full end-to-end token verification.
+- **Live generation (C4)** — set `STUDYPAL_ANTHROPIC_API_KEY`, real `ClaudeClient`
+  alongside `FakeClaude`, one live smoke generation, token logging.
+- **Fixtures (E1)** — transcribe Maths + Afrikaans artefacts → expected
+  `Assessment` JSON; flip the real fixture-replay gate on.
+- **Ops (D, deferrable)** — SMTP + keep-alive + off-platform `pg_dump`.
+- Enabling JWKS locally is a deploy step: `.env` is intentionally left in stub
+  mode (setting the JWKS vars flips get_settings into JWKS mode and would break
+  the stub tests).
