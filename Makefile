@@ -25,9 +25,15 @@ codegen: ## Regenerate web/src/api from FastAPI OpenAPI spec
 	cd api && uv run python openapi_export.py > openapi.json
 	cd web && pnpm run openapi-ts
 
+# migrate DSN precedence: MIGRATE_DSN > STUDYPAL_DB_DSN (session pooler) > DB_DSN > local default.
+# The session pooler is preferred because Supabase's DIRECT host (DB_DSN) is
+# IPv6-only and unreachable from IPv4-only networks. The pooler (:5432, session
+# mode) runs as the same owner role and is DDL-capable. Override with MIGRATE_DSN
+# to force the direct connection from an IPv6-capable host. NEVER the :6543
+# transaction pooler (it drops SET ROLE). With no .env, falls back to local docker.
 migrate: ## Apply api/migrations/*.sql in lexical order via the migration/owner role
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-	DSN="$${DB_DSN:-$(DB_DSN)}"; \
+	DSN="$${MIGRATE_DSN:-$${STUDYPAL_DB_DSN:-$${DB_DSN:-$(DB_DSN)}}}"; \
 	echo "Applying migrations ..."; \
 	for f in $(sort $(wildcard $(MIGRATIONS_DIR)/*.sql)); do \
 		echo "  --> $$f"; \

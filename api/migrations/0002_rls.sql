@@ -1,13 +1,20 @@
 -- 0002_rls.sql
 -- ENABLE ROW LEVEL SECURITY + deny-by-default + family_members-join policies.
--- Emulates Supabase RLS locally so PR-2 swaps in cleanly.
+-- Portable across real Supabase and a local Postgres that emulates it.
 -- ARCHITECTURE.md §4.3, §10 (D-R1, D-R4).
 --
 -- Identity model:
 --   - Request path runs as the `authenticated` role (non-privileged, cannot bypass RLS).
 --   - Per-transaction GUC `request.jwt.claims` carries the user's sub (user_id).
---   - Helper function `auth.uid()` reads that GUC — mirrors the Supabase-hosted version.
---   - Migrations + ops use the owner/superuser role (ONLY they can bypass RLS).
+--   - Helper function `auth.uid()` reads that GUC.
+--   - Migrations + ops use the owner role with BYPASSRLS (ONLY it can bypass RLS).
+--
+-- Real Supabase already provides the `authenticated` role and `auth.uid()`
+-- (owned by supabase_auth_admin; reads request.jwt.claims->>'sub'). The owner
+-- role (postgres) cannot CREATE OR REPLACE another role's function, so the
+-- local-emulation preamble below is guarded to run ONLY when auth.uid() is
+-- absent (i.e. a bare local Postgres). On Supabase it is skipped entirely; the
+-- RLS grants + policies further down run in BOTH environments.
 --
 -- Policies follow the D-R1 pattern:
 --   family_id IN (SELECT family_id FROM family_members WHERE user_id = auth.uid())
@@ -20,43 +27,55 @@ BEGIN
         RETURN;
     END IF;
 
-    -- -----------------------------------------------------------------------
-    -- `authenticated` role (non-privileged; never owns tables; cannot SET ROLE).
-    -- Safe to re-create: IF NOT EXISTS.
-    -- -----------------------------------------------------------------------
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-        CREATE ROLE authenticated NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+    -- =======================================================================
+    -- LOCAL EMULATION ONLY. Skipped on real Supabase, which supplies the
+    -- `authenticated` role and a compatible auth.uid(). Detected by the
+    -- presence of auth.uid(); guarding on it keeps this migration idempotent
+    -- and portable (D-R4) without a permission clash against supabase_auth_admin.
+    -- =======================================================================
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'auth' AND p.proname = 'uid'
+    ) THEN
+        -- -------------------------------------------------------------------
+        -- `authenticated` role (non-privileged; never owns tables; cannot SET ROLE).
+        -- Safe to re-create: IF NOT EXISTS.
+        -- -------------------------------------------------------------------
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            CREATE ROLE authenticated NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+        END IF;
+
+        -- Grant CONNECT on the database to `authenticated`
+        -- (We use DO block so we can reference current_database())
+        EXECUTE format(
+            'GRANT CONNECT ON DATABASE %I TO authenticated',
+            current_database()
+        );
+
+        -- -------------------------------------------------------------------
+        -- auth schema + uid() helper (mirrors Supabase-hosted auth.uid())
+        -- Reads current_setting('request.jwt.claims', true)::json->>'sub'
+        -- Returns NULL when the GUC is not set → deny-by-default.
+        -- -------------------------------------------------------------------
+        CREATE SCHEMA IF NOT EXISTS auth;
+
+        EXECUTE $func$
+            CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+                LANGUAGE sql STABLE SECURITY DEFINER
+                SET search_path = auth
+            AS $body$
+                SELECT NULLIF(
+                    current_setting('request.jwt.claims', true)::json->>'sub',
+                    ''
+                )::uuid;
+            $body$
+        $func$;
+
+        -- Grant usage so the authenticated role can call auth.uid()
+        GRANT USAGE ON SCHEMA auth TO authenticated;
+        GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
     END IF;
-
-    -- Grant CONNECT on the database to `authenticated`
-    -- (We use DO block so we can reference current_database())
-    EXECUTE format(
-        'GRANT CONNECT ON DATABASE %I TO authenticated',
-        current_database()
-    );
-
-    -- -----------------------------------------------------------------------
-    -- auth schema + uid() helper (mirrors Supabase-hosted auth.uid())
-    -- Reads current_setting('request.jwt.claims', true)::json->>'sub'
-    -- Returns NULL when the GUC is not set → deny-by-default.
-    -- -----------------------------------------------------------------------
-    CREATE SCHEMA IF NOT EXISTS auth;
-
-    EXECUTE $func$
-        CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
-            LANGUAGE sql STABLE SECURITY DEFINER
-            SET search_path = auth
-        AS $body$
-            SELECT NULLIF(
-                current_setting('request.jwt.claims', true)::json->>'sub',
-                ''
-            )::uuid;
-        $body$
-    $func$;
-
-    -- Grant usage so the authenticated role can call auth.uid()
-    GRANT USAGE ON SCHEMA auth TO authenticated;
-    GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
 
     -- -----------------------------------------------------------------------
     -- family_members: RLS-enabled self-view. authenticated may read ONLY its
