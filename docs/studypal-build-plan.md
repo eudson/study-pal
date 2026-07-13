@@ -27,27 +27,27 @@
 ## Week 3 — Child Answer Capture (iPad PWA)
 **Goal: child can submit a full test from the iPad browser.**
 - PWA install flow (vite-plugin-pwa), child mode entry
-- Per-question-type input components: MCQ picker, true/false, number pad, short text, matching, ordering, fill-in-blank
-- Question-flow screen driven by assessment JSON via the generated TS client; "not attempted" as explicit state
-- Proof-photo capture via file input with camera (paper pages photographed at submission)
-- **Screen-view fallback:** render the test in-browser for no-printer cases (child still works on paper)
-- ✅ Milestone: child enters a full historical test's answers on the iPad; submission lands in Postgres
+- ✅ (2026-07-13) Per-question-type input components — all 10 types (OptionGrid, NumberPad, TextAnswerInput, Matching, Ordering, TableGrid, Labelling)
+- ✅ (2026-07-13) Question-flow screen driven by the memo-free child-capture view via the generated TS client; "not attempted"/skip as explicit state
+- ✅ (2026-07-13) Proof-photo capture via file input with camera *(proof-only; real Supabase Storage upload deferred — sends empty paths)*
+- **Screen-view fallback:** render the test in-browser for no-printer cases (child still works on paper) *(parent-side no-printer view shipped earlier; child capture is on-screen by design)*
+- ✅ Milestone (2026-07-13): child submits a full test on the iPad; submission lands in Postgres → `ANSWERS_ENTERED` *(verified live; historical-fixture answers pending E1)*
 
 ## Week 4 — Grading Engine
 **Goal: submission → draft marks with rationale.**
-- Auto-marker for closed types (exact + fuzzy matching, accepted alternatives, confidence score)
-- Claude-assist path: one batched call per submission for open-ended questions + method-mark suggestions from proof photos; returns mark + rationale + confidence per question
-- Low-confidence flagging routes questions to parent review
-- Replay output against the 5 fixtures' *actual historical mark decisions* to measure agreement
-- ✅ Milestone: submit a fixture's answers → draft marked result matching historical marking within tolerance
+- ✅ (2026-07-13) Auto-marker for closed types (exact + normalized fuzzy, accepted alternatives, comma/dot numerics, confidence; never auto-zeros a fuzzy non-match)
+- ✅ (2026-07-13) Claude-assist path: one batched call per submission for open-ended + method marks → mark + rationale + confidence *(via FakeGrader; proof-photo method-marks NOT used — §10 no-vision-grading; live Claude deferred)*
+- ✅ (2026-07-13) Low-confidence flagging routes questions to parent review (`needs_review`)
+- Replay output against the 5 fixtures' *actual historical mark decisions* to measure agreement *(pending E1 artefacts)*
+- ✅ Milestone (2026-07-13, partial): submit → draft marked result *(fixture-tolerance replay pending E1; grading unit-tested against the two in-tree samples)*
 
 ## Week 5 — Parent Review + Gap Report
 **Goal: full single-test cycle end-to-end with your real child.**
-- Parent review UI (responsive, phone + desktop): per-question mark, rationale, edit, approve; publish gate; child-visibility config
-- Child results view honouring parent config
-- Gap report generation using the generic error taxonomy (concept / format misread / careless / not attempted), stored per cycle
-- Live dry run: one real subject, real print, real child, real review
-- ✅ Milestone: SCOPE_UPLOADED → GAP_REPORT completed live, no chat fallback needed
+- ✅ (2026-07-13) Parent review UI: per-question mark, rationale, edit (0.5 steps), "left as growing"; publish gate; per-child visibility config (Settings + publish snapshot)
+- Child results view honouring parent config *(NOT done — publish freezes `published_visibility`; child-facing results screen is a next item)*
+- ✅ (2026-07-13) Gap report generation (backend) using the generic error taxonomy, stored per cycle *(parent gap-report UI p10 NOT done yet)*
+- Live dry run: one real subject, real print, real child, real review *(pending)*
+- ✅ Milestone (2026-07-13): SCOPE_UPLOADED → GAP_REPORT completed end-to-end (backend + UI through publish; verified live on FakeClaude)
 
 ## Week 6 — Close the Loop + Alpha
 **Goal: CYCLE_COMPLETE on the family iPad + parent phones.**

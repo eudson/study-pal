@@ -199,3 +199,54 @@ uiux agents, verification + wiring by the orchestrator. Runs against
 - **Fixtures (E1)** — transcribe artefacts, flip the replay gate on.
 - **Design export** committed at `docs/design/StudyPal Journeys.html` — the
   Claude Design journeys reference for the parent/child screens.
+
+---
+
+## 2026-07-13 — Diagnostic loop: capture → grade → review → publish → gap report
+
+Autonomous orchestrator session (architect away; decisions delegated to **Fable 5**,
+who APPROVE'd the plan with 5 deltas — see `[[diagnostic-loop-build]]` memory).
+FakeClaude/FakeGrader throughout (live Claude still deferred). Two commits:
+`7dd855d` (Phase 1+2), `1abc2c0` (Phase 3+4).
+
+**What shipped (all on `main`, all green)**
+- **Phase 1 — child capture** (`data-mode="child"` kiosk mode under the parent
+  session; access model A). Memo-free `GET /cycles/{id}/capture` (stripped
+  projection — walk-the-JSON exclusion test); guarded `POST /cycles/{id}/submissions`
+  (state + child-chain + RLS) → `APPROVED_PRINTED → ANSWERS_ENTERED`. Child app:
+  capture flow + all 10 question-type inputs + SkipControl + PhotoProofCapture
+  (proof-only, upload deferred) + SubmitCelebration; full sticker energy + star
+  chrome. Kiosk mode is a UX convention, NOT a security boundary (parent JWT).
+- **Phase 2 — grading engine.** `question_marks` (0006; suggested+final marks,
+  grading_path snapshot, needs_review, ai_rationale, matched_alternative,
+  error_category; 0.5-step CHECK; Decimal). `services/grading.py` by question type
+  (never subject): AUTO / AUTO_FUZZY (normalized-exact-or-parent, never auto-zeros)
+  / CLAUDE_ASSIST via FakeGrader (one batched call/submission). `POST /cycles/{id}/grade`
+  → `AUTO_MARKED`; `GET /cycles/{id}/marks`.
+- **Phase 3 — mark review + publish.** Enriched review payload (child answer +
+  memo, parent-only). `PATCH /cycles/{id}/marks/{qid}` (final_marks 0.5 steps,
+  error_category, reviewed/overridden). Publish (0007: `marks_published_at` +
+  `published_visibility`): guard all final_marks set; freeze visibility snapshot;
+  approval-gated `PARENT_REVIEW_MARKS → GAP_REPORT`. UI: p8 Mark review
+  (ReviewRow/ConfidenceFlag/MarkEditor/"Left as growing" plum) + p9 Publish gate
+  (toggles prefilled from child defaults).
+- **Phase 4 — gap report (BACKEND ONLY).** Deterministic `derive_gap_report`
+  (mastered = full marks / growing = partial-or-zero; error_category + gap_tags
+  passthrough; subject-agnostic). `gap_reports` (0008); `POST/GET /cycles/{id}/gap-report`.
+  **No parent UI yet.**
+
+**Verification** — `make lint` clean, `make test` **307 passed** / 36 DB-skipped,
+`make codegen` idempotent, web tsc/eslint/build clean. Fixtures untouched (E1 gate
+still intentionally red). **Live full-loop smoke green** on eu-west-1: capture
+(memo-clean) → submit → grade → review → publish (visibility frozen) → gap report;
+final state `GAP_REPORT`. Migrations 0006–0008 applied to the live project.
+
+**Stopped here** (session limit). NOT done: **gap-report UI (p10)**, all of
+**study pack (Phase 5)** — `GAP_REPORT → GENERATING_STUDY_PACK → STUDY_PACK_DONE`,
+`study_packs` table, FakeStudyPack, p11 UI — and the **child results view** (publish
+records the snapshot but no child-facing results screen exists). These are the
+next items — see HANDOFF.
+
+**Known limitation (record, don't mistake for enforcement):** child kiosk mode
+runs under the parent JWT; server-side guards enforce content-safety, but it is
+not a hard security boundary. A scoped child session is a future consideration.
