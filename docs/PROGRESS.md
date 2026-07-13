@@ -250,3 +250,63 @@ next items — see HANDOFF.
 **Known limitation (record, don't mistake for enforcement):** child kiosk mode
 runs under the parent JWT; server-side guards enforce content-safety, but it is
 not a hard security boundary. A scoped child session is a future consideration.
+
+---
+
+## 2026-07-13 (session 2) — Gap report UI + Child results view + Study pack (Phase 5)
+
+Built the next three locked items on top of the diagnostic loop (all on FakeClaude/FakeGrader; live Claude C4 still deferred).
+
+- **1. Gap report UI (p10).** Parent screen `$cycleId.gap-report.tsx` (generate-if-missing
+  via GET→404→POST). `GapChip` error-taxonomy component (concept_gap | format_misread |
+  careless→"Slip" | not_attempted), whole family in plum/`--growing` — never red. Mastered=teal
+  / growing=plum lists; half-marks display correct; score card. Entry from `PublishedPage`.
+- **2. Child results view (security).** New `GET /cycles/{id}/child-results` — server-side
+  projection from the FROZEN `published_visibility` snapshot; **all four toggles gated**
+  (accuracy/effort/growing/ai_rationale → fields omitted when off). Memo structurally excluded
+  (new `child_results` schema/service; never imports `render_correct_answer`; uses memo-free
+  `render_child_answer`); `error_category`/`gap_tags` excluded too. Derive-if-missing gap report
+  in-memory (no persist/transition). Guards: 401 / 404 (RLS other-family) / 409 (pre-publish).
+  Full authz matrix tested incl. the critical snapshot-drift test (flip visibility after publish →
+  response still follows the frozen snapshot). Kiosk UI `/results/$cycleId` (ResultSummary/StampWall,
+  DESIGN §5–6), renders only server-present fields, zero parent routes. Design reviewed by advisor
+  (Fable 5) before build — REVISE→APPROVE.
+- **3. Study pack (Phase 5).** `GAP_REPORT → GENERATING_STUDY_PACK → STUDY_PACK_DONE` via
+  `cycle.py` only. `study_packs` (0009, RLS mirrors 0008) + `FakeStudyPack` (derives strictly from
+  growing `gap_tags`, subject-agnostic, one-call-per-artefact §8, separate from rendering). BOTH
+  artefacts: first WeasyPrint StudyPack PDF template (§9) + structured on-screen items. Recorded
+  parent approval `approved_at` (golden rule 8) before child visibility. Endpoints: generate / get /
+  approve / pdf. p11 parent UI (`StudyPackCard`, approve gate, PDF download via authed blob fetch).
+
+**Verification** — `make lint` clean (ruff+format+mypy; tsc+eslint). `make test` **357 passed** /
+38 DB-skipped / 2 fixture-gate deselected (E1 still intentionally red, untouched). `make codegen`
+idempotent. **Zero new design tokens.** Migration **0009 applied to live eu-west-1**. Backend live
+smoke green: server boots on migrated DB, all 4 new endpoint groups mounted, return 401 unauth
+(guards active).
+
+**UI click-through smoke (done, via a seeded cycle to GAP_REPORT under the architect's family) caught
+3 bugs — all fixed:**
+1. **Nested routes never rendered.** `/cycles/$cycleId` had no `<Outlet/>`, so the four child routes
+   (gap-report, review, publish, study-pack) changed the URL but kept showing the detail page. (This
+   also meant review/publish were only ever driven via API before, never in-browser.) Fixed:
+   `$cycleId.tsx` is now a layout that renders `<Outlet/>` when a child route is active.
+2. **Generate-if-missing broken on both gap-report and study-pack routes.** The 404 check read
+   `res.error.status` (the FastAPI `{detail}` body — no `.status`) instead of `res.response.status`,
+   so it threw "Failed to load" instead of POSTing generate. (Gap report only appeared to work because
+   the smoke pre-seeded its report via API.) Fixed to `res.response?.status === 404`.
+3. **Body text rendered as Times serif.** `base.css` set no global `font-family`, so body copy fell
+   back to the UA serif; only elements explicitly setting `--font-display` looked right. Fixed:
+   `body { font-family: var(--font-body) }`. A uiux sweep then corrected 3 chips to `--font-display`
+   and a Fredoka faux-bold weight; confirmed no stray font names outside tokens.css.
+
+Verified live: gap report (mastered/growing + GapChips), child-results kiosk, study pack (card,
+PDF 17.5 KB, approve). Re-verified green after fixes (lint clean, 357 passed). Font system unchanged —
+architect confirmed keeping the locked two-font DESIGN §3 (Fredoka display + Atkinson body).
+
+**New deps (flagged):** `weasyprint>=62`, `jinja2>=3.1` (first WeasyPrint usage; WeasyPrint is the
+locked §2 PDF choice). **Future leak note:** `StudyPackItem.answer`/`worked_example` are parent-
+reference — the deferred child on-screen practice view MUST strip them server-side like child-results.
+**Token flag:** `StampWall.stampLabel` hardcodes `14px` (no size token) — add `--fs-stamp-label`?
+
+**Next:** Variant B retest + A/B comparison (loop tail); live Claude (C4); Fixtures E1; Supabase
+Storage for photos/scope; scoped child session token.

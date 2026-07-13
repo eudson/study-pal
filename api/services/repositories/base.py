@@ -25,6 +25,7 @@ from schemas.family import (
 from schemas.gap_report import GapReport, GapReportRow
 from schemas.grading import QuestionMark
 from schemas.review import MarkPatchRequest
+from schemas.study_pack import StudyPack, StudyPackRow
 
 
 @runtime_checkable
@@ -229,4 +230,41 @@ class GapReportRepository(Protocol):
 
     def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
         """Return the gap report row for a cycle, or None if not yet generated."""
+        ...
+
+
+@runtime_checkable
+class StudyPackRepository(Protocol):
+    """Persistence for generated study packs.
+
+    family_id is NEVER accepted from the client — resolved server-side via RLS.
+    One study pack per cycle (UNIQUE(cycle_id)); upsert on regenerate.
+    """
+
+    def upsert(
+        self,
+        family_id: uuid.UUID,
+        cycle_id: uuid.UUID,
+        pack: StudyPack,
+    ) -> StudyPackRow:
+        """Upsert the study pack for a cycle.
+
+        Idempotent: re-running generate + upsert overwrites the previous row.
+        Returns the persisted StudyPackRow.
+        """
+        ...
+
+    def get_for_cycle(self, cycle_id: uuid.UUID) -> StudyPackRow | None:
+        """Return the study pack row for a cycle, or None if not yet generated."""
+        ...
+
+    def set_approved_at(
+        self,
+        cycle_id: uuid.UUID,
+        approved_at: datetime,
+    ) -> StudyPackRow:
+        """Record parent approval: set approved_at on the study pack row.
+
+        Raises ValueError if no study pack row exists for this cycle.
+        """
         ...

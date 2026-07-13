@@ -44,14 +44,14 @@
 ## Week 5 — Parent Review + Gap Report
 **Goal: full single-test cycle end-to-end with your real child.**
 - ✅ (2026-07-13) Parent review UI: per-question mark, rationale, edit (0.5 steps), "left as growing"; publish gate; per-child visibility config (Settings + publish snapshot)
-- Child results view honouring parent config *(NOT done — publish freezes `published_visibility`; child-facing results screen is a next item)*
-- ✅ (2026-07-13) Gap report generation (backend) using the generic error taxonomy, stored per cycle *(parent gap-report UI p10 NOT done yet)*
+- ✅ (2026-07-13) Child results view honouring parent config — kiosk `/results/$cycleId` (ResultSummary/StampWall), server-filtered from the frozen `published_visibility` snapshot (all 4 toggles gated), memo structurally excluded; RLS/authz-tier tests
+- ✅ (2026-07-13) Gap report generation (backend) using the generic error taxonomy, stored per cycle; ✅ (2026-07-13) parent gap-report UI p10 (GapChip taxonomy, mastered=teal/growing=plum, generate-if-missing)
 - Live dry run: one real subject, real print, real child, real review *(pending)*
 - ✅ Milestone (2026-07-13): SCOPE_UPLOADED → GAP_REPORT completed end-to-end (backend + UI through publish; verified live on FakeClaude)
 
 ## Week 6 — Close the Loop + Alpha
 **Goal: CYCLE_COMPLETE on the family iPad + parent phones.**
-- Study pack generation from gap report (rule boxes, wrong-vs-correct, drills, cheat sheet, embedded image prompts) + WeasyPrint render
+- ✅ (2026-07-13) Study pack generation from gap report — `GAP_REPORT → GENERATING_STUDY_PACK → STUDY_PACK_DONE` (via cycle.py); `study_packs` (0009) + FakeStudyPack (gap-tag-derived, subject-agnostic); BOTH artefacts (first WeasyPrint StudyPack PDF + structured on-screen items); recorded parent approval (`approved_at`) gate; p11 parent UI (StudyPackCard, approve, PDF). *(FakeStudyPack — live Claude content still deferred; Variant B tail next)*
 - Variant B generation wired to real gap data; second capture/mark/review pass reuses Weeks 3–5 components unchanged
 - A vs B comparison summary (closed / persisting / new gaps)
 - Alpha: one complete live cycle with one child, one subject

@@ -1,0 +1,27 @@
+/* GapChip — error-taxonomy chip for gap report items.
+   Always in the plum/growing family (DESIGN §2, §7).
+   Colour is never the sole signal — icon glyph + label text are always present. */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-caption);
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  /* Plum bg + plum text + subtle plum outline (DESIGN §2 — growing family). */
+  color: var(--growing-text);
+  background: var(--growing-bg);
+  border: 1.5px solid var(--growing);
+  white-space: nowrap;
+  line-height: var(--lh-tight);
+}
+
+.icon {
+  font-style: normal;
+  /* Icon glyph is presentational — aria-hidden on the parent ensures AT
+     reads the label text only, not both. */
+  flex-shrink: 0;
+}

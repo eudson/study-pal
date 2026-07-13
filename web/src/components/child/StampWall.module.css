@@ -1,0 +1,81 @@
+/* StampWall — teacher-stamp reward display (child mode).
+   DESIGN §4: circles, 3px semantic border, rotate(-8deg), Fredoka caption.
+   All values via tokens — no hardcoded colours or sizes. */
+
+.wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-5);
+  justify-content: center;
+  padding: var(--sp-4) 0;
+}
+
+/* The stamp circle itself */
+.stamp {
+  width: var(--stamp-size);
+  height: var(--stamp-size);
+  border-radius: 50%;
+  border: var(--stamp-border-w) solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-8deg);
+  /* Celebration pop-in animation — zeroed by reduced-motion tokens */
+  animation: stampPop var(--dur-celebrate) var(--ease-out) both;
+  /* Distressed / inked feel via a subtle inner opacity layer */
+  position: relative;
+  overflow: hidden;
+}
+
+/* Variant border colours follow semantic roles (DESIGN §2) */
+.stamp[data-variant="mastered"] {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.stamp[data-variant="growing"] {
+  border-color: var(--growing);
+  background: var(--growing-bg);
+}
+
+.stamp[data-variant="done"] {
+  border-color: var(--progress);
+  background: var(--gold-100);
+}
+
+/* Fredoka caption inside the stamp */
+.stampLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  /* Tighten the font size so long labels stay inside the circle */
+  font-size: 14px;
+  text-align: center;
+  letter-spacing: 0.05em;
+  line-height: var(--lh-tight);
+  padding: 0 var(--sp-3);
+  word-break: break-word;
+}
+
+.stamp[data-variant="mastered"] .stampLabel {
+  color: var(--success-text);
+}
+
+.stamp[data-variant="growing"] .stampLabel {
+  color: var(--growing-text);
+}
+
+.stamp[data-variant="done"] .stampLabel {
+  color: var(--progress-text);
+}
+
+/* Pop-in keyframes — reduced-motion tokens zero the duration to 0ms */
+@keyframes stampPop {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}

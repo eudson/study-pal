@@ -1,0 +1,125 @@
+/* ResultSummary — celebratory summary card (child mode).
+   All values via tokens only — no hardcoded colours or sizes. */
+
+.card {
+  background: var(--surface-raised);
+  border: var(--sticker-border-w) solid var(--ink-900);
+  border-bottom-width: var(--sticker-edge-w);
+  border-radius: var(--r-card);
+  padding: var(--sp-6) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+/* "You did it!" heading — Fredoka display, warm celebration */
+.heading {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-display);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+}
+
+/* Assessment title — secondary, body font */
+.title {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+}
+
+/* Score row */
+.scoreRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.scoreLabel {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.scoreValue {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: 36px;
+  color: var(--success-text);
+  line-height: var(--lh-tight);
+}
+
+.scoreDivider {
+  color: var(--text-muted);
+  margin: 0 var(--sp-1);
+  font-size: 28px;
+}
+
+/* Effort line ("You answered X of Y") */
+.effortLine {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+}
+
+/* Mastered / growing count chips.
+   Chip role = display font per DESIGN §3 ("chips/captions, friendly chunk").
+   .countNumber inside overrides to --fw-display + larger size; .countLabel
+   inherits --font-display from here — correct for a chip label. */
+.countsRow {
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.countChip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-pill);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  min-height: var(--touch-min);
+}
+
+.countChip[data-variant="mastered"] {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.countChip[data-variant="growing"] {
+  background: var(--growing-bg);
+  color: var(--growing-text);
+}
+
+.countIcon {
+  font-size: var(--fs-body);
+}
+
+.countNumber {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+}
+
+.countLabel {
+  font-size: var(--fs-sm);
+}
+
+/* When all fields are hidden — gentle message */
+.hiddenMessage {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+}

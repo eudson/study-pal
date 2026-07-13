@@ -1,0 +1,175 @@
+/* StudyPackCard — one practice item in the study pack. All values via tokens. */
+
+.card {
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-card);
+  background: var(--surface-raised);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+/* ── Item index badge ── */
+
+.itemIndex {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Prompt (main question text) ── */
+
+.prompt {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  line-height: var(--lh-body);
+  margin: 0;
+  /* Verbatim content_language content — never truncated, never restyled (DESIGN §3). */
+  white-space: pre-wrap;
+}
+
+/* ── Gap tags row ── */
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  align-items: center;
+}
+
+/* Individual gap tag chip — plum palette (DESIGN §2 "growing", §7 "never wrong").
+   Chip role = display font per DESIGN §3 ("chips/captions, friendly chunk").
+   --fw-display-md replaces the former --fw-body-bold; Fredoka has no 700 weight
+   so bold was silently ignored anyway. */
+.gapTag {
+  display: inline-flex;
+  align-items: center;
+  background: var(--growing-bg);
+  border: 1.5px solid var(--growing);
+  border-radius: var(--r-pill);
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-caption);
+  color: var(--growing-text);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ── Hint ── */
+
+.hintBox {
+  background: var(--surface-well);
+  border-left: 3px solid var(--growing);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+}
+
+.hintLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-caption);
+  color: var(--growing-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.hintText {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  margin: 0;
+}
+
+/* ── Answer / worked example toggle ── */
+
+.toggleButton {
+  appearance: none;
+  background: transparent;
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  transition: border-color var(--dur-fast) var(--ease-out);
+  align-self: flex-start;
+}
+
+.toggleButton:hover {
+  border-color: var(--ink-400);
+}
+
+.toggleButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.toggleChevron {
+  font-size: 10px;
+  transition: transform var(--dur-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+
+.toggleChevronOpen {
+  transform: rotate(90deg);
+}
+
+/* ── Answer panel (collapsed by default) ── */
+
+.answerPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  background: var(--surface-well);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.answerSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.answerLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.answerText {
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  line-height: var(--lh-body);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border-hairline);
+  margin: 0;
+}

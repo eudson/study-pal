@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="{{ content_language }}">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ title }}</title>
+  <style>
+    /* -----------------------------------------------------------------------
+       StudyPal Study Pack — WeasyPrint PDF template (ARCHITECTURE.md §9)
+       A4, header, instructions box, per-item working space, footer page numbers.
+       Subject-agnostic: no subject-specific CSS branches.
+       ----------------------------------------------------------------------- */
+
+    @page {
+      size: A4;
+      margin: 20mm 18mm 22mm 18mm;
+
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: "Atkinson Hyperlegible", Arial, sans-serif;
+        font-size: 9pt;
+        color: #888;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Atkinson Hyperlegible", Arial, sans-serif;
+      font-size: 11pt;
+      color: #1a1a1a;
+      margin: 0;
+      padding: 0;
+      line-height: 1.5;
+    }
+
+    /* -----------------------------------------------------------------------
+       Header (§9: school / subject / grade / variant / date / duration)
+       ----------------------------------------------------------------------- */
+    .header {
+      border-bottom: 2.5pt solid #2b7a78;  /* teal */
+      padding-bottom: 8pt;
+      margin-bottom: 12pt;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .header-school {
+      font-size: 9pt;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .header-title {
+      font-family: "Fredoka One", "Fredoka", Arial, sans-serif;
+      font-size: 20pt;
+      color: #2b7a78;
+      margin: 4pt 0 2pt 0;
+    }
+
+    .header-meta {
+      font-size: 9.5pt;
+      color: #444;
+    }
+
+    .header-meta table {
+      border-collapse: collapse;
+    }
+
+    .header-meta td {
+      padding: 1pt 8pt 1pt 0;
+    }
+
+    .header-meta .label {
+      font-weight: bold;
+      color: #2b7a78;
+    }
+
+    .header-badge {
+      text-align: right;
+      font-size: 9pt;
+      color: #888;
+    }
+
+    /* Name line */
+    .name-line {
+      margin: 10pt 0 4pt 0;
+      display: flex;
+      gap: 20pt;
+    }
+
+    .name-line-field {
+      flex: 1;
+      border-bottom: 1pt solid #333;
+      padding-bottom: 2pt;
+      font-size: 10pt;
+    }
+
+    .name-line-field .field-label {
+      font-size: 8.5pt;
+      color: #777;
+    }
+
+    /* -----------------------------------------------------------------------
+       Instructions box
+       ----------------------------------------------------------------------- */
+    .instructions-box {
+      border: 1pt solid #b0d0cf;
+      background: #f0f8f8;
+      border-radius: 4pt;
+      padding: 8pt 10pt;
+      margin: 10pt 0 16pt 0;
+      font-size: 10pt;
+    }
+
+    .instructions-box .instructions-heading {
+      font-weight: bold;
+      font-size: 10.5pt;
+      color: #2b7a78;
+      margin-bottom: 4pt;
+    }
+
+    .instructions-box ul {
+      margin: 0;
+      padding-left: 16pt;
+    }
+
+    .instructions-box li {
+      margin-bottom: 2pt;
+    }
+
+    /* -----------------------------------------------------------------------
+       Summary / intro
+       ----------------------------------------------------------------------- */
+    .pack-summary {
+      background: #fff8f0;
+      border-left: 3pt solid #f4a261;  /* gold/coral */
+      padding: 8pt 12pt;
+      margin-bottom: 18pt;
+      font-size: 10.5pt;
+      font-style: italic;
+      color: #444;
+    }
+
+    /* -----------------------------------------------------------------------
+       Practice items
+       ----------------------------------------------------------------------- */
+    .item {
+      page-break-inside: avoid;
+      margin-bottom: 24pt;
+      border: 1pt solid #dde;
+      border-radius: 4pt;
+      padding: 12pt 14pt 10pt 14pt;
+    }
+
+    .item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8pt;
+    }
+
+    .item-number {
+      font-family: "Fredoka One", "Fredoka", Arial, sans-serif;
+      font-size: 13pt;
+      color: #2b7a78;
+    }
+
+    .item-tags {
+      font-size: 8.5pt;
+      color: #7a5c8b;  /* plum */
+      font-style: italic;
+    }
+
+    .item-prompt {
+      font-size: 11pt;
+      margin-bottom: 10pt;
+      white-space: pre-wrap;
+    }
+
+    .hint-box {
+      background: #fdf6e3;
+      border: 0.5pt dashed #c8a84b;
+      border-radius: 3pt;
+      padding: 5pt 8pt;
+      margin-bottom: 10pt;
+      font-size: 9.5pt;
+      color: #7a6030;
+    }
+
+    .hint-label {
+      font-weight: bold;
+    }
+
+    /* Working space — generous for calculations (§9) */
+    .working-space {
+      margin-top: 8pt;
+    }
+
+    .working-space-label {
+      font-size: 8.5pt;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4pt;
+    }
+
+    .working-lines {
+      border-bottom: 0.5pt solid #ccc;
+      min-height: 80pt;  /* comfortable writing space */
+      margin-bottom: 6pt;
+    }
+
+    .answer-line {
+      display: flex;
+      align-items: center;
+      gap: 8pt;
+      margin-top: 8pt;
+      font-size: 10pt;
+    }
+
+    .answer-line-label {
+      font-weight: bold;
+      white-space: nowrap;
+      color: #2b7a78;
+    }
+
+    .answer-line-space {
+      flex: 1;
+      border-bottom: 1pt solid #333;
+      min-height: 14pt;
+    }
+
+    /* -----------------------------------------------------------------------
+       Empty state (no growing gaps)
+       ----------------------------------------------------------------------- */
+    .empty-state {
+      text-align: center;
+      color: #888;
+      margin: 40pt 0;
+      font-size: 12pt;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <div class="header">
+    <div class="header-top">
+      <div>
+        {% if school_name %}
+        <div class="header-school">{{ school_name }}</div>
+        {% endif %}
+        <div class="header-title">Study Pack</div>
+        <div class="header-meta">
+          <table>
+            <tr>
+              <td class="label">Subject:</td>
+              <td>{{ subject }}</td>
+              <td class="label">Grade:</td>
+              <td>{{ grade_label }}</td>
+            </tr>
+            <tr>
+              <td class="label">Date:</td>
+              <td>{{ date }}</td>
+              <td class="label">Items:</td>
+              <td>{{ item_count }}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <div class="header-badge">
+        Study Pack<br/>Variant A → Practice
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== NAME LINE ===== -->
+  <div class="name-line">
+    <div class="name-line-field">
+      <div class="field-label">Name</div>
+      &nbsp;
+    </div>
+    <div class="name-line-field">
+      <div class="field-label">Date completed</div>
+      &nbsp;
+    </div>
+  </div>
+
+  <!-- ===== INSTRUCTIONS BOX ===== -->
+  <div class="instructions-box">
+    <div class="instructions-heading">Instructions</div>
+    <ul>
+      <li>This pack targets the areas where you are still growing — work through each question carefully.</li>
+      <li>Show all your working in the space provided.</li>
+      <li>Write your final answer on the answer line.</li>
+      <li>Use the hint if you get stuck, but try without it first.</li>
+      <li>Ask your parent or teacher to check your answers when you are done.</li>
+    </ul>
+  </div>
+
+  <!-- ===== PACK SUMMARY ===== -->
+  <div class="pack-summary">
+    {{ pack_summary }}
+  </div>
+
+  <!-- ===== PRACTICE ITEMS ===== -->
+  {% if items %}
+    {% for item in items %}
+    <div class="item">
+      <div class="item-header">
+        <div class="item-number">Question {{ loop.index }}</div>
+        <div class="item-tags">Focus: {{ item.gap_tags | join(", ") }}</div>
+      </div>
+
+      <div class="item-prompt">{{ item.prompt }}</div>
+
+      {% if item.hint %}
+      <div class="hint-box">
+        <span class="hint-label">Hint:</span> {{ item.hint }}
+      </div>
+      {% endif %}
+
+      <div class="working-space">
+        <div class="working-space-label">Working space</div>
+        <div class="working-lines"></div>
+        <div class="working-lines"></div>
+      </div>
+
+      <div class="answer-line">
+        <span class="answer-line-label">Answer:</span>
+        <span class="answer-line-space"></span>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">
+      No growing gaps were identified — nothing to practise right now!<br/>
+      Keep up the excellent work.
+    </div>
+  {% endif %}
+
+</body>
+</html>

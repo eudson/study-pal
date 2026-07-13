@@ -1,0 +1,237 @@
+/* Study pack — p11 parent screen. All values via tokens (DESIGN law). */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  padding: var(--sp-4) var(--sp-5) var(--sp-6);
+  background: var(--canvas);
+  gap: var(--sp-3);
+  box-sizing: border-box;
+}
+
+/* ── Loading / generating states ── */
+
+.loadingShell {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  background: var(--canvas);
+}
+
+.generatingLabel {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ── Header ── */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 0 var(--sp-1);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.backBtn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-1);
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  border-radius: var(--r-control);
+}
+
+.backBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  font-size: var(--fs-h2);
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+}
+
+/* Factual subtitle: "X items · Y growing areas" */
+.subtitleLine {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
+.subtitleGrowing {
+  /* Plum for growing areas — paired with copy, never colour-only (DESIGN §8). */
+  color: var(--growing-text);
+  font-weight: var(--fw-body-bold);
+}
+
+/* ── Approved state badge row ── */
+
+.approvedRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--success-bg);
+  border: 1.5px solid var(--success);
+  border-radius: var(--r-control);
+}
+
+.approvedText {
+  font-size: var(--fs-sm);
+  color: var(--success-text);
+  line-height: var(--lh-body);
+}
+
+/* ── Summary / intro paragraph ── */
+
+.summaryText {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  line-height: var(--lh-body);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-well);
+  border-radius: var(--r-control);
+}
+
+/* ── Scrollable list of StudyPackCards ── */
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-2);
+}
+
+/* ── Empty state ── */
+
+.emptyState {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  text-align: center;
+  padding: var(--sp-5) 0;
+}
+
+/* ── Error box ── */
+
+.errorBox {
+  flex-shrink: 0;
+  background: var(--growing-bg);
+  border: 1.5px solid var(--growing);
+  border-radius: var(--r-control);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--growing-text);
+  line-height: var(--lh-body);
+}
+
+/* ── Footer actions ── */
+
+.footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ctaFull {
+  width: 100%;
+}
+
+/* Secondary action (download PDF, etc.) — quieter than the primary CTA */
+.secondaryBtn {
+  appearance: none;
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border-hairline);
+  border-radius: var(--r-control);
+  font-family: var(--font-display);
+  font-weight: var(--fw-display-md);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--sp-3) var(--sp-4);
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.secondaryBtn:hover {
+  border-color: var(--ink-400);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondaryBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* ── Spinner ── */
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 5px solid var(--paper-300);
+  border-top-color: var(--coral-500);
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: var(--paper-300);
+    opacity: 0.6;
+  }
+}

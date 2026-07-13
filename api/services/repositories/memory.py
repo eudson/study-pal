@@ -22,6 +22,7 @@ from schemas.family import (
 from schemas.gap_report import GapReport, GapReportRow
 from schemas.grading import QuestionMark
 from schemas.review import MarkPatchRequest
+from schemas.study_pack import StudyPack, StudyPackRow
 
 
 def _now() -> datetime:
@@ -378,3 +379,54 @@ class InMemoryGapReportRepository:
 
     def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
         return self._store.get(cycle_id)
+
+
+class InMemoryStudyPackRepository:
+    """Process-local study pack store for unit tests (no Postgres required).
+
+    Satisfies the StudyPackRepository Protocol.
+    Keyed by cycle_id (UNIQUE constraint mirrors the DB table).
+    """
+
+    def __init__(self) -> None:
+        # cycle_id → StudyPackRow
+        self._store: dict[uuid.UUID, StudyPackRow] = {}
+
+    def upsert(
+        self,
+        family_id: uuid.UUID,
+        cycle_id: uuid.UUID,
+        pack: StudyPack,
+    ) -> StudyPackRow:
+        """Upsert: insert or overwrite the study pack for this cycle."""
+        existing = self._store.get(cycle_id)
+        row_id = existing.id if existing is not None else uuid.uuid4()
+        # Preserve approved_at on re-run so approval is not silently cleared.
+        approved_at = existing.approved_at if existing is not None else None
+        now = _now()
+        row = StudyPackRow(
+            id=row_id,
+            family_id=family_id,
+            cycle_id=cycle_id,
+            pack=pack,
+            approved_at=approved_at,
+            created_at=now,
+        )
+        self._store[cycle_id] = row
+        return row
+
+    def get_for_cycle(self, cycle_id: uuid.UUID) -> StudyPackRow | None:
+        return self._store.get(cycle_id)
+
+    def set_approved_at(
+        self,
+        cycle_id: uuid.UUID,
+        approved_at: datetime,
+    ) -> StudyPackRow:
+        """Record parent approval timestamp on the study pack row."""
+        existing = self._store.get(cycle_id)
+        if existing is None:
+            raise ValueError(f"No study pack found for cycle {cycle_id} — generate one first.")
+        updated = existing.model_copy(update={"approved_at": approved_at})
+        self._store[cycle_id] = updated
+        return updated

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useMatches, Outlet, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -9,8 +9,21 @@ import { Chip } from "../../components/Chip";
 import styles from "./-cycle.module.css";
 
 export const Route = createFileRoute("/cycles/$cycleId")({
-  component: CycleDetailPage,
+  component: CycleRoute,
 });
+
+/**
+ * Layout wrapper for /cycles/$cycleId. The child routes (gap-report, review,
+ * publish, study-pack) are nested under this route and render through <Outlet/>.
+ * When a child route is active we render the Outlet; otherwise we render the
+ * cycle detail page itself. Without this, navigating to a child route changes
+ * the URL but keeps showing the detail page (no Outlet = child never mounts).
+ */
+function CycleRoute() {
+  const matches = useMatches();
+  const hasChildRoute = matches.some((m) => m.routeId.startsWith("/cycles/$cycleId/"));
+  return hasChildRoute ? <Outlet /> : <CycleDetailPage />;
+}
 
 function CycleDetailPage() {
   const { cycleId } = Route.useParams();
@@ -131,6 +144,11 @@ function CycleDetailPage() {
   // GAP_REPORT → marks published, show confirmation
   if (cycle.state === "GAP_REPORT") {
     return <PublishedPage cycleId={cycleId} />;
+  }
+
+  // GENERATING_STUDY_PACK / STUDY_PACK_DONE → study pack is available or being built
+  if (cycle.state === "GENERATING_STUDY_PACK" || cycle.state === "STUDY_PACK_DONE") {
+    return <StudyPackReadyPage cycleId={cycleId} isGenerating={cycle.state === "GENERATING_STUDY_PACK"} />;
   }
 
   if (screenView) {
@@ -491,6 +509,63 @@ function SectionBlock({ section, allQuestions }: { section: Section; allQuestion
 export { SectionBlock };
 
 // ────────────────────────────────────────────────────────
+// Study pack ready / generating — entry point view
+// ────────────────────────────────────────────────────────
+
+interface StudyPackReadyPageProps {
+  cycleId: string;
+  isGenerating: boolean;
+}
+
+function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) {
+  const navigate = useNavigate();
+
+  return (
+    <div className={styles.shell}>
+      <div className={styles.draftHeader}>
+        <div className={styles.draftHeaderLeft}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            aria-label="Back"
+            onClick={() => void navigate({ to: "/" })}
+          >
+            ‹
+          </button>
+          <div className={styles.pageTitle}>
+            {isGenerating ? "Building study pack" : "Study pack ready"}
+          </div>
+        </div>
+        {/* gold = in progress; teal = done (DESIGN §2 semantic roles). */}
+        <Chip variant={isGenerating ? "gold" : "teal"}>
+          {isGenerating ? "Building" : "Ready"}
+        </Chip>
+      </div>
+
+      <p className={styles.draftSubtext}>
+        {isGenerating
+          ? "The study pack is being built from the gap report. This usually takes a moment."
+          : "The study pack is ready. Review practice items and approve before your child sees it."}
+      </p>
+
+      <div className={styles.actionStack}>
+        <StickerButton
+          className={styles.ctaFull}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/study-pack",
+              params: { cycleId },
+            })
+          }
+        >
+          {isGenerating ? "View study pack" : "View study pack"}
+        </StickerButton>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────
 // Auto-marked — parent marks review entry point
 // ────────────────────────────────────────────────────────
 
@@ -578,8 +653,35 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
       </p>
 
       <div className={styles.actionStack}>
+        {/* Primary CTA: gap report (the main next step after publishing). */}
         <StickerButton
           className={styles.ctaFull}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/gap-report",
+              params: { cycleId },
+            })
+          }
+        >
+          View gap report
+        </StickerButton>
+        {/* Study pack — natural next step after reviewing the gap report. */}
+        <button
+          type="button"
+          className={styles.secondaryBtn}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/study-pack",
+              params: { cycleId },
+            })
+          }
+        >
+          Create study pack
+        </button>
+        {/* Secondary: marks review is still accessible if the parent needs to re-check. */}
+        <button
+          type="button"
+          className={styles.secondaryBtn}
           onClick={() =>
             void navigate({
               to: "/cycles/$cycleId/review",
@@ -588,7 +690,20 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
           }
         >
           View marks
-        </StickerButton>
+        </button>
+        {/* Tertiary: hand the device to the child to see their results. */}
+        <button
+          type="button"
+          className={styles.secondaryBtn}
+          onClick={() =>
+            void navigate({
+              to: "/results/$cycleId",
+              params: { cycleId },
+            })
+          }
+        >
+          Show my child their results
+        </button>
       </div>
     </div>
   );

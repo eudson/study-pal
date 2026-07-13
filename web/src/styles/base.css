@@ -21,3 +21,12 @@ html, body, #root {
      each screen shell manages its own overflow independently. */
   overscroll-behavior: none;
 }
+
+/* Global default typography. Without this, any element that doesn't set its
+   own font-family inherits the UA default serif (Times) — DESIGN §3 requires
+   Atkinson Hyperlegible for all body copy; headings/buttons opt into Fredoka
+   via --font-display. tokens.css (loaded after this file) defines both vars. */
+body {
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}

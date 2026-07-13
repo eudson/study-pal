@@ -444,6 +444,157 @@ export type ChildResponseItem = {
 };
 
 /**
+ * ChildResultItem
+ *
+ * One question's child-visible result.
+ *
+ * Fields gated by ``published_visibility``:
+ * - ``marks_earned`` / ``marks_total``: present only when ``snapshot.accuracy`` is True.
+ * - ``status``: present only when ``snapshot.growing`` is True.
+ * - ``ai_rationale``: present only when ``snapshot.ai_rationale`` is True.
+ *
+ * Fields ABSOLUTELY EXCLUDED (structural exclusion, not runtime hiding):
+ * error_category, gap_tags, suggested_marks, confidence, needs_review,
+ * correct_answer_rendered, and any AnswerPayload-derived field.
+ */
+export type ChildResultItem = {
+    /**
+     * Question Id
+     *
+     * qid from the original assessment question.
+     */
+    question_id: string;
+    /**
+     * Number
+     *
+     * Question number as printed, e.g. "3", "3.1".
+     */
+    number: string;
+    /**
+     * Text
+     *
+     * The full question text/label.
+     */
+    text: string;
+    /**
+     * Child Answer Rendered
+     *
+     * Human-readable rendering of the child's submitted response. Rendered via render_child_answer — memo-free. Returns '(not attempted)' for unanswered questions.
+     */
+    child_answer_rendered: string;
+    /**
+     * Marks Earned
+     *
+     * Marks the child earned for this question. None when published_visibility.accuracy is False. Decimal to preserve 0.5-step half-marks (ARCHITECTURE.md rule 7).
+     */
+    marks_earned?: string | null;
+    /**
+     * Marks Total
+     *
+     * Maximum marks available for this question. None when published_visibility.accuracy is False.
+     */
+    marks_total?: string | null;
+    /**
+     * mastered or growing. None when published_visibility.growing is False. 'growing' is used instead of 'wrong'/'failed' (ARCHITECTURE.md §10 design rule).
+     */
+    status?: GapStatus | null;
+    /**
+     * Ai Rationale
+     *
+     * Claude's grading rationale, if present on the QuestionMark. None unless published_visibility.ai_rationale is True. Never present when the toggle is off — not filtered client-side.
+     */
+    ai_rationale?: string | null;
+};
+
+/**
+ * ChildResultsSummary
+ *
+ * Aggregate summary of the child's published results.
+ *
+ * Fields are gated by ``published_visibility`` toggles exactly as the
+ * per-item fields are — ``None`` means the parent chose not to share that
+ * dimension with the child for this cycle.
+ */
+export type ChildResultsSummary = {
+    /**
+     * Total Questions
+     *
+     * Total number of questions in the assessment.
+     */
+    total_questions: number;
+    /**
+     * Attempted Count
+     *
+     * Number of questions the child attempted (payload non-empty). None when published_visibility.effort is False.
+     */
+    attempted_count?: number | null;
+    /**
+     * Mastered Count
+     *
+     * Number of questions fully mastered (full marks). None when published_visibility.growing is False.
+     */
+    mastered_count?: number | null;
+    /**
+     * Growing Count
+     *
+     * Number of questions in 'growing' status (below full marks). None when published_visibility.growing is False.
+     */
+    growing_count?: number | null;
+    /**
+     * Marks Earned
+     *
+     * Total marks earned across all questions. None when published_visibility.accuracy is False.
+     */
+    marks_earned?: string | null;
+    /**
+     * Marks Available
+     *
+     * Total marks available across all questions. None when published_visibility.accuracy is False.
+     */
+    marks_available?: string | null;
+};
+
+/**
+ * ChildResultsView
+ *
+ * Complete child-visible results for a published cycle.
+ *
+ * Produced by ``services.child_results.project_results_for_child`` from the
+ * frozen ``published_visibility`` snapshot.  The snapshot is set at publish
+ * time and is never affected by subsequent changes to the child's
+ * ``visibility_defaults`` (drift test: the freeze is the contract).
+ *
+ * This model contains NO memo, correct-answer, or answer-key fields.
+ */
+export type ChildResultsView = {
+    /**
+     * Cycle Id
+     *
+     * The cycle these results belong to.
+     */
+    cycle_id: string;
+    /**
+     * Title
+     *
+     * Assessment title as printed on the paper.
+     */
+    title: string;
+    /**
+     * Published At
+     *
+     * UTC timestamp when the parent published marks (marks_published_at).
+     */
+    published_at: string;
+    summary: ChildResultsSummary;
+    /**
+     * Items
+     *
+     * One item per question that has a reviewed mark, ordered to match assessment section/question order.
+     */
+    items: Array<ChildResultItem>;
+};
+
+/**
  * ChildSectionView
  *
  * A section as visible to the child — full structure, no answer keys.
@@ -1577,6 +1728,145 @@ export type ShortAnswerSpec = {
      * Marker Guidance
      */
     marker_guidance?: string | null;
+};
+
+/**
+ * StudyPack
+ *
+ * Complete study pack for a single assessment cycle.
+ *
+ * Produced by ``FakeStudyPack.generate`` from a GapReport; stored as JSONB
+ * in the study_packs table.
+ *
+ * ``derived_from_gap_tags`` is the distinct sorted union of all gap_tags
+ * across items — the set fed to Variant B retargeting (mirrors
+ * GapReportSummary.growing_gap_tags).
+ *
+ * ``summary`` is a short human-readable intro/framing paragraph shown at
+ * the top of the pack (on-screen and in PDF).  Language follows
+ * ``content_language`` of the originating assessment.
+ */
+export type StudyPack = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Assessment Id
+     */
+    assessment_id: string;
+    /**
+     * Items
+     */
+    items?: Array<StudyPackItem>;
+    /**
+     * Summary
+     *
+     * Short intro / framing paragraph for the pack (on-screen header and PDF cover text).
+     */
+    summary: string;
+    /**
+     * Derived From Gap Tags
+     *
+     * Distinct sorted union of all gap_tags across items — mirrors GapReportSummary.growing_gap_tags.
+     */
+    derived_from_gap_tags?: Array<string>;
+    /**
+     * Generated At
+     *
+     * UTC timestamp when the pack was generated.
+     */
+    generated_at: string;
+};
+
+/**
+ * StudyPackItem
+ *
+ * One structured practice item derived from a gap.
+ *
+ * ``gap_tags`` identifies which growing gap(s) from the report this item
+ * targets — passed through verbatim from the GapReportItem(s) that seeded it.
+ *
+ * ``question_type`` is the type of practice question (mirrors the
+ * assessment schema's question_type values: mcq, short_answer, etc.).
+ * Grading and on-screen rendering key off this, not the subject.
+ *
+ * ``prompt`` is the full practice question text shown to the child on-screen
+ * and rendered in the PDF.
+ *
+ * ``worked_example`` is an optional detailed worked-through solution for the
+ * parent or tutor to reference — intentionally separate from the answer so
+ * the child's copy can omit it.  Stored as plain text (may include simple
+ * notation); subject-agnostic.
+ *
+ * ``answer`` is the expected answer for parent reference (plain text).
+ * Not shown to the child before they attempt the question.
+ *
+ * ``hint`` is an optional short scaffold hint shown to the child if they
+ * are stuck.  May be null when no hint is appropriate.
+ */
+export type StudyPackItem = {
+    /**
+     * Item Id
+     *
+     * Stable unique identifier for this practice item.
+     */
+    item_id: string;
+    /**
+     * Gap Tags
+     *
+     * Gap tags from the gap report items this practice item targets. At least one tag must be present (items are only generated for growing gaps).
+     */
+    gap_tags: Array<string>;
+    /**
+     * Question Type
+     *
+     * Question type driving on-screen rendering and PDF layout (e.g. 'short_answer', 'calculation', 'mcq'). Never branched on subject — subject intelligence lives in prompts.
+     */
+    question_type: string;
+    /**
+     * Prompt
+     *
+     * Full practice question/task text for the child.
+     */
+    prompt: string;
+    /**
+     * Worked Example
+     *
+     * Detailed worked-through solution (parent/tutor reference only). Not exposed to the child before they attempt.
+     */
+    worked_example?: string | null;
+    /**
+     * Answer
+     *
+     * Expected answer (parent reference). Not shown to child before attempt.
+     */
+    answer: string;
+    /**
+     * Hint
+     *
+     * Optional short scaffold hint for the child. Null when no hint is appropriate for this question type.
+     */
+    hint?: string | null;
+};
+
+/**
+ * StudyPackResponse
+ *
+ * API response for study-pack endpoints.
+ */
+export type StudyPackResponse = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    pack: StudyPack;
+    /**
+     * Approved At
+     *
+     * Null until the parent approves; set by POST .../study-pack/approve.
+     */
+    approved_at?: string | null;
 };
 
 /**
@@ -2727,3 +3017,151 @@ export type GenerateGapReportResponses = {
 };
 
 export type GenerateGapReportResponse = GenerateGapReportResponses[keyof GenerateGapReportResponses];
+
+export type GetStudyPackData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/study-pack';
+};
+
+export type GetStudyPackErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetStudyPackError = GetStudyPackErrors[keyof GetStudyPackErrors];
+
+export type GetStudyPackResponses = {
+    /**
+     * Successful Response
+     */
+    200: StudyPackResponse;
+};
+
+export type GetStudyPackResponse = GetStudyPackResponses[keyof GetStudyPackResponses];
+
+export type GenerateStudyPackData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/study-pack';
+};
+
+export type GenerateStudyPackErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GenerateStudyPackError = GenerateStudyPackErrors[keyof GenerateStudyPackErrors];
+
+export type GenerateStudyPackResponses = {
+    /**
+     * Successful Response
+     */
+    200: StudyPackResponse;
+};
+
+export type GenerateStudyPackResponse = GenerateStudyPackResponses[keyof GenerateStudyPackResponses];
+
+export type ApproveStudyPackData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/study-pack/approve';
+};
+
+export type ApproveStudyPackErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ApproveStudyPackError = ApproveStudyPackErrors[keyof ApproveStudyPackErrors];
+
+export type ApproveStudyPackResponses = {
+    /**
+     * Successful Response
+     */
+    200: StudyPackResponse;
+};
+
+export type ApproveStudyPackResponse = ApproveStudyPackResponses[keyof ApproveStudyPackResponses];
+
+export type GetStudyPackPdfData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/study-pack/pdf';
+};
+
+export type GetStudyPackPdfErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetStudyPackPdfError = GetStudyPackPdfErrors[keyof GetStudyPackPdfErrors];
+
+export type GetStudyPackPdfResponses = {
+    /**
+     * Study pack PDF.
+     */
+    200: unknown;
+};
+
+export type GetChildResultsData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/child-results';
+};
+
+export type GetChildResultsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetChildResultsError = GetChildResultsErrors[keyof GetChildResultsErrors];
+
+export type GetChildResultsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChildResultsView;
+};
+
+export type GetChildResultsResponse = GetChildResultsResponses[keyof GetChildResultsResponses];

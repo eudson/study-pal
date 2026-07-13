@@ -12,6 +12,8 @@ Implemented transitions:
     ANSWERS_ENTERED  → AUTO_MARKED
     AUTO_MARKED      → PARENT_REVIEW_MARKS   (first mark patch triggers this)
     PARENT_REVIEW_MARKS → GAP_REPORT         (publish gate — child-visible, parent approval)
+    GAP_REPORT → GENERATING_STUDY_PACK
+    GENERATING_STUDY_PACK → STUDY_PACK_DONE
 """
 
 from __future__ import annotations
@@ -190,6 +192,36 @@ def publish_marks(
         marks_published_at=approval_at,
         published_visibility=published_visibility,
     )
+
+
+def advance_to_generating_study_pack(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """GAP_REPORT → GENERATING_STUDY_PACK.
+
+    Called when study pack generation is kicked off.
+    Not a child-visible gate — the child sees nothing until the pack is
+    approved via the approve endpoint (golden rule 8).
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.GENERATING_STUDY_PACK)
+    return repo.update_cycle_state(cycle_id, CycleState.GENERATING_STUDY_PACK)
+
+
+def advance_to_study_pack_done(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """GENERATING_STUDY_PACK → STUDY_PACK_DONE.
+
+    Called when study pack generation completes successfully.
+    Not a child-visible gate — child visibility is gated on
+    POST /cycles/{id}/study-pack/approve (golden rule 8).
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.STUDY_PACK_DONE)
+    return repo.update_cycle_state(cycle_id, CycleState.STUDY_PACK_DONE)
 
 
 # ---------------------------------------------------------------------------

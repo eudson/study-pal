@@ -52,7 +52,8 @@ router = APIRouter(prefix="/cycles")
 # States in which the gap report is valid to generate or fetch.
 # GAP_REPORT is the resting state after publish; all subsequent states are also
 # acceptable (study pack, Variant B, complete).
-_GAP_REPORT_VALID_STATES: frozenset[CycleState] = frozenset(
+# Exported so child_results.py can reuse it without redefining.
+GAP_REPORT_VALID_STATES: frozenset[CycleState] = frozenset(
     {
         CycleState.GAP_REPORT,
         CycleState.GENERATING_STUDY_PACK,
@@ -101,7 +102,7 @@ def generate_gap_report(
             detail="Cycle not found.",
         )
 
-    if cycle.state not in _GAP_REPORT_VALID_STATES:
+    if cycle.state not in GAP_REPORT_VALID_STATES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(

@@ -27,6 +27,7 @@ from services.repositories.base import (
     FamilyRepository,
     GapReportRepository,
     QuestionMarkRepository,
+    StudyPackRepository,
     SubmissionRepository,
 )
 from services.repositories.postgres import (
@@ -37,6 +38,7 @@ from services.repositories.postgres import (
 from services.repositories.postgres_family import PostgresFamilyRepository
 from services.repositories.postgres_gap_report import PostgresGapReportRepository
 from services.repositories.postgres_marks import PostgresQuestionMarkRepository
+from services.repositories.postgres_study_pack import PostgresStudyPackRepository
 from services.repositories.postgres_submission import PostgresSubmissionRepository
 
 
@@ -124,6 +126,24 @@ def get_gap_report_repository(
     try:
         conn = open_authenticated_connection(settings.db_dsn, identity)
         yield PostgresGapReportRepository(conn)
+    finally:
+        if conn is not None and not conn.closed:
+            conn.close()
+
+
+def get_study_pack_repository(
+    identity: Identity = Depends(get_identity),
+    settings: Settings = Depends(get_settings),
+) -> Generator[StudyPackRepository, None, None]:
+    """Open a per-request, tenant-scoped Postgres connection and yield StudyPackRepository.
+
+    Same invariants as the other repositories — runs as authenticated role,
+    RLS enforced by DB, family_id never from the client.
+    """
+    conn: DictConn | None = None
+    try:
+        conn = open_authenticated_connection(settings.db_dsn, identity)
+        yield PostgresStudyPackRepository(conn)
     finally:
         if conn is not None and not conn.closed:
             conn.close()

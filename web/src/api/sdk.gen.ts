@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -419,5 +419,109 @@ export const getGapReport = <ThrowOnError extends boolean = false>(options: Opti
 export const generateGapReport = <ThrowOnError extends boolean = false>(options: Options<GenerateGapReportData, ThrowOnError>): RequestResult<GenerateGapReportResponses, GenerateGapReportErrors, ThrowOnError> => (options.client ?? client).post<GenerateGapReportResponses, GenerateGapReportErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
     url: '/cycles/{cycle_id}/gap-report',
+    ...options
+});
+
+/**
+ * Return the stored study pack for a cycle. 404 if not yet generated.
+ *
+ * Return the persisted study pack.
+ *
+ * Guards:
+ * 1. User has a family (RLS).
+ * 2. Cycle exists and belongs to caller's family.
+ * 3. Study pack row exists — 404 if not yet generated.
+ */
+export const getStudyPack = <ThrowOnError extends boolean = false>(options: Options<GetStudyPackData, ThrowOnError>): RequestResult<GetStudyPackResponses, GetStudyPackErrors, ThrowOnError> => (options.client ?? client).get<GetStudyPackResponses, GetStudyPackErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/study-pack',
+    ...options
+});
+
+/**
+ * Generate (or re-generate) the study pack from the gap report. Idempotent. Cycle must be in GAP_REPORT or a later state.
+ *
+ * Generate and persist the study pack for a cycle.
+ *
+ * Guards (in order):
+ * 1. User has a family (RLS).
+ * 2. Cycle exists and belongs to caller's family (RLS).
+ * 3. Cycle is in GAP_REPORT or a later state.
+ * 4. The cycle has a Variant-A assessment (for gap derivation fallback).
+ * 5. The cycle has at least one graded mark (for gap derivation fallback).
+ *
+ * Idempotent: if the cycle is already in STUDY_PACK_DONE or later, the
+ * transition calls are skipped and only the pack upsert runs.
+ *
+ * The gap report is read from the gap_repo if already stored; if not, it
+ * is re-derived in memory from the assessment + marks (fallback).  The
+ * primary path is to read the stored gap report.
+ */
+export const generateStudyPack = <ThrowOnError extends boolean = false>(options: Options<GenerateStudyPackData, ThrowOnError>): RequestResult<GenerateStudyPackResponses, GenerateStudyPackErrors, ThrowOnError> => (options.client ?? client).post<GenerateStudyPackResponses, GenerateStudyPackErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/study-pack',
+    ...options
+});
+
+/**
+ * Record parent approval for the study pack (golden rule 8 gate). Sets approved_at; study pack is visible to child only after this call.
+ *
+ * Record parent approval timestamp on the study pack.
+ *
+ * This is the golden-rule-8 gate: the study pack is exposed to the child
+ * only after the parent explicitly calls this endpoint.  The approval
+ * timestamp is stored on the study_packs row (``approved_at``).
+ *
+ * Guards:
+ * 1. User has a family (RLS).
+ * 2. Cycle exists and belongs to caller's family.
+ * 3. Study pack must exist (generate first — 404 if not).
+ *
+ * Idempotent: calling approve more than once updates the timestamp to now().
+ */
+export const approveStudyPack = <ThrowOnError extends boolean = false>(options: Options<ApproveStudyPackData, ThrowOnError>): RequestResult<ApproveStudyPackResponses, ApproveStudyPackErrors, ThrowOnError> => (options.client ?? client).post<ApproveStudyPackResponses, ApproveStudyPackErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/study-pack/approve',
+    ...options
+});
+
+/**
+ * Render the study pack to PDF (WeasyPrint). Returns application/pdf.
+ *
+ * Render the study pack to PDF and return as a streaming response.
+ *
+ * Guards:
+ * 1. User has a family (RLS).
+ * 2. Cycle exists and belongs to caller's family.
+ * 3. Study pack must exist (generate first — 404 if not).
+ *
+ * The PDF is rendered on every request (no caching) — consistent with the
+ * assessment PDF pattern.  Content language from the assessment is used when
+ * available.
+ */
+export const getStudyPackPdf = <ThrowOnError extends boolean = false>(options: Options<GetStudyPackPdfData, ThrowOnError>): RequestResult<GetStudyPackPdfResponses, GetStudyPackPdfErrors, ThrowOnError> => (options.client ?? client).get<GetStudyPackPdfResponses, GetStudyPackPdfErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/study-pack/pdf',
+    ...options
+});
+
+/**
+ * Return the child-visible published results for a cycle, server-side filtered through the frozen published_visibility snapshot. Cycle must be in GAP_REPORT or a later state.
+ *
+ * Return the child-visible published results.
+ *
+ * Guards (in order):
+ * 1. Caller has a family (RLS — cross-family cycles are invisible → 404).
+ * 2. Cycle exists in the caller's family; None → 404.
+ * 3. Cycle is in GAP_REPORT or a later state → 409 if not.
+ * 4. ``published_visibility`` snapshot exists on the cycle → 409/500 if absent.
+ * 5. Resolve marks + submission responses.  Gap report: use the stored row
+ * when present; derive in-memory otherwise (no persist, no Claude, no
+ * state transition).
+ * 6. Project through the frozen snapshot via ``project_results_for_child``.
+ */
+export const getChildResults = <ThrowOnError extends boolean = false>(options: Options<GetChildResultsData, ThrowOnError>): RequestResult<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError> => (options.client ?? client).get<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/child-results',
     ...options
 });

@@ -11,13 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as ResultsCycleIdRouteImport } from './routes/results/$cycleId'
 import { Route as CyclesNewRouteImport } from './routes/cycles/new'
 import { Route as CyclesCycleIdRouteImport } from './routes/cycles/$cycleId'
 import { Route as CaptureCycleIdRouteImport } from './routes/capture/$cycleId'
 import { Route as SettingsChildrenNewRouteImport } from './routes/settings/children/new'
 import { Route as SettingsChildrenChildIdRouteImport } from './routes/settings/children/$childId'
+import { Route as CyclesCycleIdStudyPackRouteImport } from './routes/cycles/$cycleId.study-pack'
 import { Route as CyclesCycleIdReviewRouteImport } from './routes/cycles/$cycleId.review'
 import { Route as CyclesCycleIdPublishRouteImport } from './routes/cycles/$cycleId.publish'
+import { Route as CyclesCycleIdGapReportRouteImport } from './routes/cycles/$cycleId.gap-report'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -27,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResultsCycleIdRoute = ResultsCycleIdRouteImport.update({
+  id: '/results/$cycleId',
+  path: '/results/$cycleId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CyclesNewRoute = CyclesNewRouteImport.update({
@@ -54,6 +62,11 @@ const SettingsChildrenChildIdRoute = SettingsChildrenChildIdRouteImport.update({
   path: '/settings/children/$childId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CyclesCycleIdStudyPackRoute = CyclesCycleIdStudyPackRouteImport.update({
+  id: '/study-pack',
+  path: '/study-pack',
+  getParentRoute: () => CyclesCycleIdRoute,
+} as any)
 const CyclesCycleIdReviewRoute = CyclesCycleIdReviewRouteImport.update({
   id: '/review',
   path: '/review',
@@ -64,15 +77,23 @@ const CyclesCycleIdPublishRoute = CyclesCycleIdPublishRouteImport.update({
   path: '/publish',
   getParentRoute: () => CyclesCycleIdRoute,
 } as any)
+const CyclesCycleIdGapReportRoute = CyclesCycleIdGapReportRouteImport.update({
+  id: '/gap-report',
+  path: '/gap-report',
+  getParentRoute: () => CyclesCycleIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/capture/$cycleId': typeof CaptureCycleIdRoute
   '/cycles/$cycleId': typeof CyclesCycleIdRouteWithChildren
   '/cycles/new': typeof CyclesNewRoute
+  '/results/$cycleId': typeof ResultsCycleIdRoute
   '/settings/': typeof SettingsIndexRoute
+  '/cycles/$cycleId/gap-report': typeof CyclesCycleIdGapReportRoute
   '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
   '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
+  '/cycles/$cycleId/study-pack': typeof CyclesCycleIdStudyPackRoute
   '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
   '/settings/children/new': typeof SettingsChildrenNewRoute
 }
@@ -81,9 +102,12 @@ export interface FileRoutesByTo {
   '/capture/$cycleId': typeof CaptureCycleIdRoute
   '/cycles/$cycleId': typeof CyclesCycleIdRouteWithChildren
   '/cycles/new': typeof CyclesNewRoute
+  '/results/$cycleId': typeof ResultsCycleIdRoute
   '/settings': typeof SettingsIndexRoute
+  '/cycles/$cycleId/gap-report': typeof CyclesCycleIdGapReportRoute
   '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
   '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
+  '/cycles/$cycleId/study-pack': typeof CyclesCycleIdStudyPackRoute
   '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
   '/settings/children/new': typeof SettingsChildrenNewRoute
 }
@@ -93,9 +117,12 @@ export interface FileRoutesById {
   '/capture/$cycleId': typeof CaptureCycleIdRoute
   '/cycles/$cycleId': typeof CyclesCycleIdRouteWithChildren
   '/cycles/new': typeof CyclesNewRoute
+  '/results/$cycleId': typeof ResultsCycleIdRoute
   '/settings/': typeof SettingsIndexRoute
+  '/cycles/$cycleId/gap-report': typeof CyclesCycleIdGapReportRoute
   '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
   '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
+  '/cycles/$cycleId/study-pack': typeof CyclesCycleIdStudyPackRoute
   '/settings/children/$childId': typeof SettingsChildrenChildIdRoute
   '/settings/children/new': typeof SettingsChildrenNewRoute
 }
@@ -106,9 +133,12 @@ export interface FileRouteTypes {
     | '/capture/$cycleId'
     | '/cycles/$cycleId'
     | '/cycles/new'
+    | '/results/$cycleId'
     | '/settings/'
+    | '/cycles/$cycleId/gap-report'
     | '/cycles/$cycleId/publish'
     | '/cycles/$cycleId/review'
+    | '/cycles/$cycleId/study-pack'
     | '/settings/children/$childId'
     | '/settings/children/new'
   fileRoutesByTo: FileRoutesByTo
@@ -117,9 +147,12 @@ export interface FileRouteTypes {
     | '/capture/$cycleId'
     | '/cycles/$cycleId'
     | '/cycles/new'
+    | '/results/$cycleId'
     | '/settings'
+    | '/cycles/$cycleId/gap-report'
     | '/cycles/$cycleId/publish'
     | '/cycles/$cycleId/review'
+    | '/cycles/$cycleId/study-pack'
     | '/settings/children/$childId'
     | '/settings/children/new'
   id:
@@ -128,9 +161,12 @@ export interface FileRouteTypes {
     | '/capture/$cycleId'
     | '/cycles/$cycleId'
     | '/cycles/new'
+    | '/results/$cycleId'
     | '/settings/'
+    | '/cycles/$cycleId/gap-report'
     | '/cycles/$cycleId/publish'
     | '/cycles/$cycleId/review'
+    | '/cycles/$cycleId/study-pack'
     | '/settings/children/$childId'
     | '/settings/children/new'
   fileRoutesById: FileRoutesById
@@ -140,6 +176,7 @@ export interface RootRouteChildren {
   CaptureCycleIdRoute: typeof CaptureCycleIdRoute
   CyclesCycleIdRoute: typeof CyclesCycleIdRouteWithChildren
   CyclesNewRoute: typeof CyclesNewRoute
+  ResultsCycleIdRoute: typeof ResultsCycleIdRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   SettingsChildrenChildIdRoute: typeof SettingsChildrenChildIdRoute
   SettingsChildrenNewRoute: typeof SettingsChildrenNewRoute
@@ -159,6 +196,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings/'
       preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/results/$cycleId': {
+      id: '/results/$cycleId'
+      path: '/results/$cycleId'
+      fullPath: '/results/$cycleId'
+      preLoaderRoute: typeof ResultsCycleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cycles/new': {
@@ -196,6 +240,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsChildrenChildIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cycles/$cycleId/study-pack': {
+      id: '/cycles/$cycleId/study-pack'
+      path: '/study-pack'
+      fullPath: '/cycles/$cycleId/study-pack'
+      preLoaderRoute: typeof CyclesCycleIdStudyPackRouteImport
+      parentRoute: typeof CyclesCycleIdRoute
+    }
     '/cycles/$cycleId/review': {
       id: '/cycles/$cycleId/review'
       path: '/review'
@@ -210,17 +261,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CyclesCycleIdPublishRouteImport
       parentRoute: typeof CyclesCycleIdRoute
     }
+    '/cycles/$cycleId/gap-report': {
+      id: '/cycles/$cycleId/gap-report'
+      path: '/gap-report'
+      fullPath: '/cycles/$cycleId/gap-report'
+      preLoaderRoute: typeof CyclesCycleIdGapReportRouteImport
+      parentRoute: typeof CyclesCycleIdRoute
+    }
   }
 }
 
 interface CyclesCycleIdRouteChildren {
+  CyclesCycleIdGapReportRoute: typeof CyclesCycleIdGapReportRoute
   CyclesCycleIdPublishRoute: typeof CyclesCycleIdPublishRoute
   CyclesCycleIdReviewRoute: typeof CyclesCycleIdReviewRoute
+  CyclesCycleIdStudyPackRoute: typeof CyclesCycleIdStudyPackRoute
 }
 
 const CyclesCycleIdRouteChildren: CyclesCycleIdRouteChildren = {
+  CyclesCycleIdGapReportRoute: CyclesCycleIdGapReportRoute,
   CyclesCycleIdPublishRoute: CyclesCycleIdPublishRoute,
   CyclesCycleIdReviewRoute: CyclesCycleIdReviewRoute,
+  CyclesCycleIdStudyPackRoute: CyclesCycleIdStudyPackRoute,
 }
 
 const CyclesCycleIdRouteWithChildren = CyclesCycleIdRoute._addFileChildren(
@@ -232,6 +294,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaptureCycleIdRoute: CaptureCycleIdRoute,
   CyclesCycleIdRoute: CyclesCycleIdRouteWithChildren,
   CyclesNewRoute: CyclesNewRoute,
+  ResultsCycleIdRoute: ResultsCycleIdRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   SettingsChildrenChildIdRoute: SettingsChildrenChildIdRoute,
   SettingsChildrenNewRoute: SettingsChildrenNewRoute,

@@ -9,6 +9,8 @@ dependencies = [
     "pydantic-settings>=2.3",
     "psycopg[binary]>=3.1",
     "pyjwt[crypto]>=2.9",
+    "jinja2>=3.1",
+    "weasyprint>=62.0",
 ]
 
 [dependency-groups]
@@ -55,6 +57,13 @@ exclude = ["\\.venv"]
 [[tool.mypy.overrides]]
 module = "schemas.assessment_schema"
 disable_error_code = ["prop-decorator", "type-arg"]
+
+# jinja2 and weasyprint ship their own stubs via mypy extensions; when the
+# environment does not have types-* packages installed, ignore the missing stub
+# errors rather than adding dev-only type-stub dependencies.
+[[tool.mypy.overrides]]
+module = ["jinja2", "jinja2.*", "weasyprint", "weasyprint.*"]
+ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

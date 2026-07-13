@@ -7,7 +7,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import assessments, capture, cycles, families, gap_report, grading, health, review
+from routers import (
+    assessments,
+    capture,
+    child_results,
+    cycles,
+    families,
+    gap_report,
+    grading,
+    health,
+    review,
+    study_pack,
+)
 
 
 def create_app() -> FastAPI:
@@ -30,6 +41,8 @@ def create_app() -> FastAPI:
     app.include_router(grading.router)
     app.include_router(review.router)
     app.include_router(gap_report.router)
+    app.include_router(study_pack.router)
+    app.include_router(child_results.router)
 
     return app
 
