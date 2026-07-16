@@ -1,7 +1,10 @@
 # Round/Phase architecture — variant-agnostic cycle model
 
-**Status:** DESIGN — architect-approved direction (2026-07-16); advisor-reviewed
-(REVISE → all required changes folded in below, 2026-07-16). Ready for P1. Supersedes the
+**Status:** ✅ IMPLEMENTED (P1–P6, 2026-07-16). Architect-approved direction; advisor-reviewed
+(REVISE → all required changes folded in below). Backend variant-agnostic, frontend phase-driven,
+`VariantBPage` deleted; ARCHITECTURE §5/§10 updated. Deferred hygiene: drop the shadowed
+`state`/enum + single-valued approval columns; tidy the one round-1-vs-2 branch in `retest.py`.
+Supersedes the
 "Variant B = same-cycle under `GENERATING_B`" decisions in ARCHITECTURE §10 (2026-07-16).
 This is a §5 state-machine change; §5/§10 are rewritten in P6 (the ratification point).
 

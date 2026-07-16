@@ -391,3 +391,65 @@ clean. Logged in ARCHITECTURE §10.
 **Next (all blocked-on-architect or deferred):** live Claude (C4 — needs real API key + go-ahead);
 Fixtures E1 (needs the 5 historical source artefacts); Supabase Storage for photos/scope; scoped
 child session token; a live eu-west-1 smoke + in-browser click-through of the Variant B tail.
+
+---
+
+## 2026-07-16 (session 2) — Variant-agnostic cycle rebuild: `(round, phase)` model
+
+Architect-directed. The Variant B work (above) shipped, then the architect flagged the
+remaining variant-based code as a scalability smell ("a `variant_c.py` tomorrow"; the
+frontend still forked via `VariantBPage`). Full FE+BE audit → root cause = an **asymmetric
+state machine** (round 1's capture→grade→review were real states; round 2's were crammed
+into one `GENERATING_B` state). Decision (architect-approved, advisor-signed REVISE→met,
+`docs/design/round-phase-architecture.md`): rebuild the cycle on orthogonal **`round` +
+generic `phase`** so every round runs one identical flow.
+
+**Shipped in gated phases (each: `make lint` + no-DB + real-Postgres DB-tier green):**
+- **P1** (`9332157`) — schema foundation: `CyclePhase` enum + total `state↔(round,phase)`
+  mappings; `cycles.round/phase`; new `cycle_round_approvals (cycle_id, round)` + RLS (closes
+  the per-round approval-clobber gap); `gap_reports`/`study_packs`/`assessments` gain `round`
+  with `UNIQUE(cycle_id, round)`. Additive; `state` stays the driver. Validated 0001→0013 from
+  scratch on real Postgres, idempotent.
+- **P2** (`4958fa9`) — generic `advance_phase`/`start_next_round`; all `advance_to_*` become
+  delegating wrappers; per-round approval dual-write. Behaviour-preserving.
+- **P3** (`0ea7abf`) — collapsed `generate`/`generate_variant_b` into one `_generate(strategy)`
+  (Scope vs Retarget round-input strategies).
+- **P4-1** (`ab244e4`) — the core collapse: round 2 gets REAL phases (symmetric draft-approval);
+  `round_phase_to_state` round-agnostic; `PHASE_CONFIG` re-keyed by phase (A/B rows merge);
+  routers guard by phase; retest generate→DRAFT_REVIEW. Round-1 A tests unchanged (regression net);
+  `test_variant_b` rewritten to the new flow.
+- **P4-2** (`7c718dc`) — gap-report/study-pack/child-results parameterized by round; child-results
+  reads the FROZEN per-round `cycle_round_approvals[round].published_visibility` (round 2's publish
+  can no longer clobber round 1's contract); round-2 artifacts persist per round.
+- **P5** (`4ccf791`) — frontend dispatches on `(round, phase)`; **`VariantBPage` deleted**; one set
+  of phase pages for every round; `roundConfig(round)` drives labels/comparison/child-visibility.
+  Also fixed a latent round-1 gap (frontend never triggered grade — masked by seeded-cycle testing);
+  uiux pass PASS (+ a copy-correctness fix: retest results are parent-only in v1).
+- **P6** — home card migrated off `cycle.state` to `(round, phase)` (last variant-baked FE code);
+  ARCHITECTURE §5 rewritten to the generic model + §10 ratification (supersedes the in-absence
+  variant_b entries).
+
+**Result:** backend is variant-agnostic (`variant` is a derived label, never control flow — one
+`PHASE_CONFIG`, one generation service, per-round persistence); a hypothetical round 3 is a
+`_PHASE_ALLOWED`/config addition, zero new files/endpoints/pages. Round-1 A behaviour identical
+throughout (its tests, unchanged, are the regression proof). Final: no-DB **447 passed**, DB-tier
+**487 passed** (only the intentional `fixture_gate` red), web typecheck/lint/build clean, codegen current.
+
+**Process notes / disclosures:**
+- **CI had been red since ≥2026-07-13** — prior "green" was local `make test` with the DB tier
+  *skipped* (no local Postgres); CI runs the DB tier where stale test harnesses failed
+  (`submissions.cycle_id`, bad jsonb literals, a `SET LOCAL jwt.claims` cleared-on-commit). Fixed
+  (`83e1852`, test-harness only) → **CI now green** (api+web+codegen). A local Postgres is now
+  wired into verification so the DB tier is a real gate.
+- **Unintended live migration:** `make migrate` sources `.env` internally (overriding a shell DSN),
+  so P1's 0010–0013 applied to the live eu-west-1 project. Additive/non-destructive; it's the schema
+  the running server needs. Further live migrations held until the refactor is signed off (use
+  `MIGRATE_DSN` to target a DB explicitly).
+
+**Deferred hygiene (logged, non-blocking):** drop the shadowed `cycles.state`/`CycleState` enum +
+single-valued approval columns (a forward-only migration; nothing branches on them); tidy the one
+round-1-vs-2 branch in `retest.py`'s comparison helper.
+
+**Next:** live browser re-test of the uniform loop (round 1 + round 2 through the same pages) on the
+running stack (eu-west-1 already has the P1 schema); then the standing deferrals — live Claude (C4),
+Fixtures E1, Supabase Storage, scoped child session token.

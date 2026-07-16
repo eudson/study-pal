@@ -174,7 +174,12 @@ function CycleDetailPage() {
         cycleId={cycleId}
         round={round}
         variant={variant}
-        isGenerating={cycle.state === "GENERATING_STUDY_PACK"}
+        // Generation is synchronous (design/round-phase-architecture.md §6.1):
+        // there is no durable "building" moment once phase STUDY_PACK is
+        // reached — the row already exists. Always false; the collapsed
+        // GENERATING_STUDY_PACK/STUDY_PACK_DONE distinction from the old
+        // `state` enum has no (round,phase) equivalent to read.
+        isGenerating={false}
       />
     );
   }

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { listCycles, listChildren, listSubjects } from "../api/sdk.gen";
-import type { CycleResponse, CycleState } from "../api/types.gen";
+import type { CycleResponse, CyclePhase } from "../api/types.gen";
 import { useAuth } from "../lib/auth";
 import { StickerButton } from "../components/StickerButton";
 import { Chip } from "../components/Chip";
@@ -13,41 +13,41 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-// Map cycle states to human-readable chips
-const STATE_LABELS: Record<CycleState, string> = {
+// Map cycle phases to human-readable chips (labels carried over verbatim
+// from the old variant-baked `STATE_LABELS`; STUDY_PACK collapses the old
+// GENERATING_STUDY_PACK/STUDY_PACK_DONE pair into one phase — see
+// docs/design/round-phase-architecture.md §6.1, generation is synchronous
+// so there's no durable "building" moment to show).
+const PHASE_LABELS: Record<CyclePhase, string> = {
   SCOPE_UPLOADED: "Uploaded",
-  GENERATING_A: "Generating",
-  PARENT_REVIEWS_DRAFT: "Draft ready",
-  APPROVED_PRINTED: "Printed",
+  GENERATING: "Generating",
+  DRAFT_REVIEW: "Draft ready",
+  PRINTED: "Printed",
   ANSWERS_ENTERED: "Awaiting mark",
-  AUTO_MARKED: "Marked",
-  PARENT_REVIEW_MARKS: "Review marks",
-  GAP_REPORT: "Gap report",
-  GENERATING_STUDY_PACK: "Building pack",
-  STUDY_PACK_DONE: "Study pack done",
-  GENERATING_B: "Generating B",
-  CYCLE_COMPLETE: "Complete",
+  MARKED: "Marked",
+  REVIEW_MARKS: "Review marks",
+  PUBLISHED: "Gap report",
+  STUDY_PACK: "Study pack done",
+  COMPLETE: "Complete",
 };
 
-// State to timeline step index (0-3 for the 4-step progress bar)
-const STATE_STEP: Record<CycleState, number> = {
+// Phase to timeline step index (0-3 for the 4-step progress bar)
+const PHASE_STEP: Record<CyclePhase, number> = {
   SCOPE_UPLOADED: 0,
-  GENERATING_A: 0,
-  PARENT_REVIEWS_DRAFT: 1,
-  APPROVED_PRINTED: 2,
+  GENERATING: 0,
+  DRAFT_REVIEW: 1,
+  PRINTED: 2,
   ANSWERS_ENTERED: 2,
-  AUTO_MARKED: 3,
-  PARENT_REVIEW_MARKS: 3,
-  GAP_REPORT: 3,
-  GENERATING_STUDY_PACK: 3,
-  STUDY_PACK_DONE: 3,
-  GENERATING_B: 3,
-  CYCLE_COMPLETE: 3,
+  MARKED: 3,
+  REVIEW_MARKS: 3,
+  PUBLISHED: 3,
+  STUDY_PACK: 3,
+  COMPLETE: 3,
 };
 
-// Map cycle state to chip colour variant
-function stateChipVariant(state: CycleState): ChipVariant {
-  if (state === "PARENT_REVIEWS_DRAFT" || state === "APPROVED_PRINTED" || state === "CYCLE_COMPLETE") {
+// Map cycle phase to chip colour variant
+function phaseChipVariant(phase: CyclePhase): ChipVariant {
+  if (phase === "DRAFT_REVIEW" || phase === "PRINTED" || phase === "COMPLETE") {
     return "teal";
   }
   return "gold";
@@ -59,11 +59,15 @@ function formatDate(iso: string): string {
 }
 
 function CycleCard({ cycle, childName, subjectName }: { cycle: CycleResponse; childName: string; subjectName: string }) {
-  const step = STATE_STEP[cycle.state];
+  // `phase` may be absent pre-hydration; SCOPE_UPLOADED (step 0, gold) is the
+  // safe earliest-phase fallback — mirrors how `cycles/$cycleId.tsx` treats
+  // an undefined phase as "still generating".
+  const phase = cycle.phase ?? "SCOPE_UPLOADED";
+  const step = PHASE_STEP[phase];
   const steps = [0, 1, 2, 3];
   // Round 2+ = retest (design/round.ts roundConfig). Neutral chip — this is
   // an identity label, not a status, so it stays visually quiet next to the
-  // status chip (which already carries the teal/gold state meaning).
+  // status chip (which already carries the teal/gold phase meaning).
   const isRetest = (cycle.round ?? 1) >= 2;
 
   return (
@@ -74,8 +78,8 @@ function CycleCard({ cycle, childName, subjectName }: { cycle: CycleResponse; ch
         </span>
         <div className={styles.cycleCardChips}>
           {isRetest && <Chip variant="neutral">Retest</Chip>}
-          <Chip variant={stateChipVariant(cycle.state)}>
-            {STATE_LABELS[cycle.state]}
+          <Chip variant={phaseChipVariant(phase)}>
+            {PHASE_LABELS[phase]}
           </Chip>
         </div>
       </div>
