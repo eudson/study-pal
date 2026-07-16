@@ -21,7 +21,7 @@ import re
 import uuid
 
 from config import Settings, get_settings
-from schemas.assessment_schema import Assessment
+from schemas.assessment_schema import Assessment, VariantBRequest
 from schemas.generation import CallLog, GenerateAssessmentRequest, GenerateAssessmentResponse
 from schemas.validation import ValidationResult
 from services.claude_client import ClaudeClient
@@ -34,9 +34,19 @@ _PROMPT_PATH = (
     + "services/prompts/generate_assessment_v1.md"
 )
 
+_VARIANT_B_PROMPT_PATH = (
+    __file__[: __file__.rfind("services/generation_service.py")]
+    + "services/prompts/generate_variant_b_v1.md"
+)
+
 
 def _load_prompt_template() -> str:
     with open(_PROMPT_PATH, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _load_variant_b_prompt_template() -> str:
+    with open(_VARIANT_B_PROMPT_PATH, encoding="utf-8") as fh:
         return fh.read()
 
 
@@ -44,6 +54,19 @@ def _build_prompt(scope_text: str, max_questions: int) -> str:
     template = _load_prompt_template()
     prompt = template.replace("{{SCOPE_TEXT}}", scope_text)
     prompt = prompt.replace("{{MAX_QUESTIONS}}", str(max_questions))
+    return prompt
+
+
+def _build_variant_b_prompt(request: VariantBRequest) -> str:
+    template = _load_variant_b_prompt_template()
+    prompt = template.replace(
+        "{{SOURCE_ASSESSMENT_JSON}}", request.source_assessment.model_dump_json(indent=2)
+    )
+    prompt = prompt.replace(
+        "{{GAPS_JSON}}",
+        json.dumps([g.model_dump(mode="json") for g in request.gaps], indent=2),
+    )
+    prompt = prompt.replace("{{NOTE}}", request.note)
     return prompt
 
 
@@ -148,6 +171,59 @@ class GenerationService:
             ),
         )
 
+    def generate_variant_b(
+        self,
+        request: VariantBRequest,
+        *,
+        assessment_id: str | None = None,
+    ) -> GenerateAssessmentResponse:
+        """Generate and validate a Variant-B retest; return structured result.
+
+        Mirrors ``generate()`` exactly (one Claude call, validate, one repair
+        retry, structured error) but targets the Variant-B prompt and hard-sets
+        ``variant="B"`` on the output (invariant 6 extension — the model must
+        not decide the variant either).  ``cycle_id`` is taken from the source
+        assessment (Variant B is same-cycle, ARCHITECTURE.md §5).
+        """
+        settings = self._settings
+        assigned_id = assessment_id or str(uuid.uuid4())
+        cycle_id = request.source_assessment.cycle_id
+
+        prompt = _build_variant_b_prompt(request)
+
+        # --- First call ---
+        raw_str, log1 = self._claude.complete(prompt, attempt=1)
+        _log_call(log1)
+
+        result, raw_doc = self._try_validate(raw_str, assigned_id, cycle_id, settings, variant="B")
+
+        if result.valid and raw_doc is not None:
+            assessment = Assessment.model_validate(raw_doc)
+            return GenerateAssessmentResponse(ok=True, assessment=assessment)
+
+        # --- Repair retry (hard cap: exactly one) ---
+        repair_prompt = self._build_repair_prompt(prompt, raw_str, result)
+        raw_str2, log2 = self._claude.complete(repair_prompt, attempt=2)
+        _log_call(log2)
+
+        result2, raw_doc2 = self._try_validate(
+            raw_str2, assigned_id, cycle_id, settings, variant="B"
+        )
+
+        if result2.valid and raw_doc2 is not None:
+            assessment = Assessment.model_validate(raw_doc2)
+            return GenerateAssessmentResponse(ok=True, assessment=assessment)
+
+        # --- Structured error after two failures ---
+        return GenerateAssessmentResponse(
+            ok=False,
+            issues=result2.issues,
+            error=(
+                "Variant B generation failed schema validation after "
+                "one repair attempt. See issues for details."
+            ),
+        )
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -158,6 +234,8 @@ class GenerationService:
         assessment_id: str,
         cycle_id: str,
         settings: Settings,
+        *,
+        variant: str = "A",
     ) -> tuple[ValidationResult, dict[str, object] | None]:
         """Parse JSON, enforce caps, inject service-assigned ids, validate."""
         try:
@@ -208,6 +286,7 @@ class GenerationService:
         # Invariant 6: service assigns ids — overwrite anything the model supplied.
         raw_doc["assessment_id"] = assessment_id
         raw_doc["cycle_id"] = cycle_id
+        raw_doc["variant"] = variant
 
         result = validate_assessment(raw_doc)
         if result.valid:

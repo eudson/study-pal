@@ -52,8 +52,8 @@
 ## Week 6 — Close the Loop + Alpha
 **Goal: CYCLE_COMPLETE on the family iPad + parent phones.**
 - ✅ (2026-07-13) Study pack generation from gap report — `GAP_REPORT → GENERATING_STUDY_PACK → STUDY_PACK_DONE` (via cycle.py); `study_packs` (0009) + FakeStudyPack (gap-tag-derived, subject-agnostic); BOTH artefacts (first WeasyPrint StudyPack PDF + structured on-screen items); recorded parent approval (`approved_at`) gate; p11 parent UI (StudyPackCard, approve, PDF). *(FakeStudyPack — live Claude content still deferred; Variant B tail next)*
-- Variant B generation wired to real gap data; second capture/mark/review pass reuses Weeks 3–5 components unchanged
-- A vs B comparison summary (closed / persisting / new gaps)
+- ✅ (2026-07-16) Variant B generation wired to real gap data (`generate_variant_b` on the source assessment + gap-report growing gaps); second capture/mark/review pass reuses Weeks 3–5 components unchanged (via a `?variant=a|b` search param; leaf components untouched). Same-cycle, §5 unchanged; dedicated `routers/variant_b.py`; variant-explicit marks queries; A+B coexistence gate. *(FakeClaude; live Claude C4 still deferred)*
+- ✅ (2026-07-16) A vs B comparison summary (closed / persisting / new gaps) — pure `derive_ab_comparison` matching on `gap_tags`; `$cycleId.comparison.tsx` (Closed=teal / growing+new=plum, never red); B gap report derived in-memory (no migration)
 - Alpha: one complete live cycle with one child, one subject
 - ✅ Milestone: full diagnostic loop, app-orchestrated end to end
 

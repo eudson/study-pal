@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useMatches, Outlet, Link } from "@tanstac
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { getCycle, generateAssessmentForCycle, approveCycleDraft } from "../../api/sdk.gen";
+import { getCycle, generateAssessmentForCycle, approveCycleDraft, generateVariantB } from "../../api/sdk.gen";
 import type { Assessment, Section, Question, CycleResponse } from "../../api/types.gen";
 import { StickerButton } from "../../components/StickerButton";
 import { Chip } from "../../components/Chip";
@@ -149,6 +149,18 @@ function CycleDetailPage() {
   // GENERATING_STUDY_PACK / STUDY_PACK_DONE → study pack is available or being built
   if (cycle.state === "GENERATING_STUDY_PACK" || cycle.state === "STUDY_PACK_DONE") {
     return <StudyPackReadyPage cycleId={cycleId} isGenerating={cycle.state === "GENERATING_STUDY_PACK"} />;
+  }
+
+  // GENERATING_B → Variant B retest in progress (child capture → grade →
+  // parent mark review → A-vs-B comparison). Cycle stays in this state
+  // throughout; the sub-flow is driven by explicit parent navigation.
+  if (cycle.state === "GENERATING_B") {
+    return <VariantBPage cycleId={cycleId} />;
+  }
+
+  // CYCLE_COMPLETE → terminal state, comparison is available read-only.
+  if (cycle.state === "CYCLE_COMPLETE") {
+    return <CyclesCompletePage cycleId={cycleId} />;
   }
 
   if (screenView) {
@@ -519,6 +531,25 @@ interface StudyPackReadyPageProps {
 
 function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [variantBError, setVariantBError] = useState<string | null>(null);
+
+  const startVariantBMutation = useMutation({
+    mutationFn: async () => {
+      setVariantBError(null);
+      const res = await generateVariantB({ path: { cycle_id: cycleId } });
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("Starting the retest failed");
+      return res.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["cycle", cycleId] });
+      void qc.invalidateQueries({ queryKey: ["cycles"] });
+    },
+    onError: (err: unknown) => {
+      setVariantBError(err instanceof Error ? err.message : "Starting the retest failed");
+    },
+  });
 
   return (
     <div className={styles.shell}>
@@ -560,6 +591,26 @@ function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) 
         >
           {isGenerating ? "View study pack" : "View study pack"}
         </StickerButton>
+
+        {/* Retest — only offered once the study pack is ready, not while
+            still generating. Starts Variant B (Week 6 loop tail). */}
+        {!isGenerating && (
+          <>
+            {variantBError && (
+              <div className={styles.errorBox} role="alert">
+                {variantBError}
+              </div>
+            )}
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              disabled={startVariantBMutation.isPending}
+              onClick={() => startVariantBMutation.mutate()}
+            >
+              {startVariantBMutation.isPending ? "Starting…" : "Start Variant B retest"}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -704,6 +755,128 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
         >
           Show my child their results
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// GENERATING_B — Variant B retest in progress. The cycle stays in this
+// state throughout capture → grade → parent review → comparison; the
+// sub-flow is driven by explicit parent navigation between the existing
+// (reused) capture/review routes with ?variant=b, and the new comparison
+// route, rather than by additional cycle states.
+// ────────────────────────────────────────────────────────
+
+function VariantBPage({ cycleId }: { cycleId: string }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className={styles.shell}>
+      <div className={styles.draftHeader}>
+        <div className={styles.draftHeaderLeft}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            aria-label="Back"
+            onClick={() => void navigate({ to: "/" })}
+          >
+            ‹
+          </button>
+          <div className={styles.pageTitle}>Variant B retest</div>
+        </div>
+        {/* gold = in progress (DESIGN §2 semantic roles). */}
+        <Chip variant="gold">In progress</Chip>
+      </div>
+
+      <p className={styles.draftSubtext}>
+        Your child answers a fresh set of questions covering the same ground.
+        Once marks are reviewed, you&apos;ll see how the gaps from last time compare.
+      </p>
+
+      <div className={styles.actionStack}>
+        <StickerButton
+          className={styles.ctaFull}
+          onClick={() =>
+            void navigate({
+              to: "/capture/$cycleId",
+              params: { cycleId },
+              search: { variant: "b" },
+            })
+          }
+        >
+          Enter retest answers
+        </StickerButton>
+        <button
+          type="button"
+          className={styles.secondaryBtn}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/review",
+              params: { cycleId },
+              search: { variant: "b" },
+            })
+          }
+        >
+          Review retest marks
+        </button>
+        <button
+          type="button"
+          className={styles.secondaryBtn}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/comparison",
+              params: { cycleId },
+            })
+          }
+        >
+          View comparison
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// CYCLE_COMPLETE — terminal state, comparison available read-only.
+// ────────────────────────────────────────────────────────
+
+function CyclesCompletePage({ cycleId }: { cycleId: string }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className={styles.shell}>
+      <div className={styles.draftHeader}>
+        <div className={styles.draftHeaderLeft}>
+          <button
+            type="button"
+            className={styles.backBtn}
+            aria-label="Back"
+            onClick={() => void navigate({ to: "/" })}
+          >
+            ‹
+          </button>
+          <div className={styles.pageTitle}>Cycle complete</div>
+        </div>
+        <Chip variant="teal">Complete</Chip>
+      </div>
+
+      <p className={styles.draftSubtext}>
+        This diagnostic loop is finished. You can still review the A-vs-B comparison any time.
+      </p>
+
+      <div className={styles.actionStack}>
+        <StickerButton
+          className={styles.ctaFull}
+          onClick={() =>
+            void navigate({
+              to: "/cycles/$cycleId/comparison",
+              params: { cycleId },
+            })
+          }
+        >
+          View comparison
+        </StickerButton>
       </div>
     </div>
   );

@@ -116,7 +116,7 @@ def review_question_mark(
         )
 
     # Resolve submission_id for this cycle.
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id)
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
     if submission_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -222,7 +222,7 @@ def publish_marks_endpoint(
         )
 
     # Resolve submission_id for this cycle.
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id)
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
     if submission_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -230,7 +230,7 @@ def publish_marks_endpoint(
         )
 
     # Guard: every mark must have final_marks set.
-    all_marks = marks_repo.list_for_cycle(cycle_id)
+    all_marks = marks_repo.list_for_cycle(cycle_id, "A")
     unresolved = [m.question_id for m in all_marks if m.final_marks is None]
     if unresolved:
         error = UnresolvedMarksError(

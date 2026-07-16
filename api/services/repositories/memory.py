@@ -301,14 +301,21 @@ class InMemoryQuestionMarkRepository:
     def list_for_submission(self, submission_id: uuid.UUID) -> list[QuestionMark]:
         return [m for (sid, _qid), m in self._store.items() if sid == submission_id]
 
-    def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]:
-        # In-memory: we can't join through assessments, so return all marks.
-        # Tests that need cycle-level isolation should use Postgres.
+    def list_for_cycle(self, cycle_id: uuid.UUID, variant: str) -> list[QuestionMark]:
+        # In-memory: we can't join through assessments/cycles, so this cannot
+        # filter by cycle_id or variant on its own (no relational join
+        # available). ``variant`` is accepted to satisfy the Protocol shape
+        # (Week 6 guardrail) but is not applied here.
+        # Tests that need real cycle/variant isolation should subclass this
+        # repository and back onto ``self._store`` directly (see
+        # test_gap_report.py / test_child_results.py / test_variant_b.py for
+        # the established pattern).
         return list(self._store.values())
 
-    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None:
+    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID, variant: str) -> uuid.UUID | None:
         # Not meaningfully implementable without the relational join.
-        # Tests that need this should use Postgres or pass submission_id directly.
+        # Tests that need this should use Postgres or subclass with real
+        # cycle/variant-aware bookkeeping (see established test pattern).
         return None
 
     def get_mark(

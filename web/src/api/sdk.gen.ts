@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CompleteCycleData, CompleteCycleErrors, CompleteCycleResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, CreateVariantBSubmissionData, CreateVariantBSubmissionErrors, CreateVariantBSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GenerateVariantBData, GenerateVariantBErrors, GenerateVariantBResponses, GetAbComparisonData, GetAbComparisonErrors, GetAbComparisonResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GetVariantBCaptureViewData, GetVariantBCaptureViewErrors, GetVariantBCaptureViewResponses, GetVariantBMarksData, GetVariantBMarksErrors, GetVariantBMarksResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, GradeVariantBData, GradeVariantBErrors, GradeVariantBResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, ReviewVariantBMarkData, ReviewVariantBMarkErrors, ReviewVariantBMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -523,5 +523,94 @@ export const getStudyPackPdf = <ThrowOnError extends boolean = false>(options: O
 export const getChildResults = <ThrowOnError extends boolean = false>(options: Options<GetChildResultsData, ThrowOnError>): RequestResult<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError> => (options.client ?? client).get<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
     url: '/cycles/{cycle_id}/child-results',
+    ...options
+});
+
+/**
+ * Generate the Variant B retest from the stored Variant A assessment + gap report. Advances STUDY_PACK_DONE -> GENERATING_B.
+ *
+ * Generate (or return the already-generated) Variant B assessment.
+ *
+ * Guards:
+ * 1. Cycle exists in the caller's family (RLS).
+ * 2. Cycle is STUDY_PACK_DONE, or GENERATING_B with no B assessment yet
+ * (retry path) — 409 otherwise.
+ * 3. Idempotent: if GENERATING_B and a B assessment already exists, return
+ * it without regenerating.
+ */
+export const generateVariantB = <ThrowOnError extends boolean = false>(options: Options<GenerateVariantBData, ThrowOnError>): RequestResult<GenerateVariantBResponses, GenerateVariantBErrors, ThrowOnError> => (options.client ?? client).post<GenerateVariantBResponses, GenerateVariantBErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/variant-b',
+    ...options
+});
+
+/**
+ * Return the memo-free child view of the Variant B assessment (cycle must be GENERATING_B).
+ */
+export const getVariantBCaptureView = <ThrowOnError extends boolean = false>(options: Options<GetVariantBCaptureViewData, ThrowOnError>): RequestResult<GetVariantBCaptureViewResponses, GetVariantBCaptureViewErrors, ThrowOnError> => (options.client ?? client).get<GetVariantBCaptureViewResponses, GetVariantBCaptureViewErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/variant-b/capture',
+    ...options
+});
+
+/**
+ * Submit child answers for Variant B. Cycle state is NOT advanced.
+ */
+export const createVariantBSubmission = <ThrowOnError extends boolean = false>(options: Options<CreateVariantBSubmissionData, ThrowOnError>): RequestResult<CreateVariantBSubmissionResponses, CreateVariantBSubmissionErrors, ThrowOnError> => (options.client ?? client).post<CreateVariantBSubmissionResponses, CreateVariantBSubmissionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/variant-b/submissions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Grade the Variant B submission; upserts marks. Cycle state is NOT advanced.
+ */
+export const gradeVariantB = <ThrowOnError extends boolean = false>(options: Options<GradeVariantBData, ThrowOnError>): RequestResult<GradeVariantBResponses, GradeVariantBErrors, ThrowOnError> => (options.client ?? client).post<GradeVariantBResponses, GradeVariantBErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/variant-b/grade',
+    ...options
+});
+
+/**
+ * List Variant B marks with question context (parent review screen).
+ */
+export const getVariantBMarks = <ThrowOnError extends boolean = false>(options: Options<GetVariantBMarksData, ThrowOnError>): RequestResult<GetVariantBMarksResponses, GetVariantBMarksErrors, ThrowOnError> => (options.client ?? client).get<GetVariantBMarksResponses, GetVariantBMarksErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/variant-b/marks',
+    ...options
+});
+
+/**
+ * Parent override of a single Variant B question mark.
+ */
+export const reviewVariantBMark = <ThrowOnError extends boolean = false>(options: Options<ReviewVariantBMarkData, ThrowOnError>): RequestResult<ReviewVariantBMarkResponses, ReviewVariantBMarkErrors, ThrowOnError> => (options.client ?? client).patch<ReviewVariantBMarkResponses, ReviewVariantBMarkErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/variant-b/marks/{question_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Derive the A-vs-B gap comparison. Requires Variant B to be fully marked.
+ */
+export const getAbComparison = <ThrowOnError extends boolean = false>(options: Options<GetAbComparisonData, ThrowOnError>): RequestResult<GetAbComparisonResponses, GetAbComparisonErrors, ThrowOnError> => (options.client ?? client).get<GetAbComparisonResponses, GetAbComparisonErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/comparison',
+    ...options
+});
+
+/**
+ * Terminal transition GENERATING_B -> CYCLE_COMPLETE. Requires Variant B fully marked.
+ */
+export const completeCycle = <ThrowOnError extends boolean = false>(options: Options<CompleteCycleData, ThrowOnError>): RequestResult<CompleteCycleResponses, CompleteCycleErrors, ThrowOnError> => (options.client ?? client).post<CompleteCycleResponses, CompleteCycleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/complete',
     ...options
 });

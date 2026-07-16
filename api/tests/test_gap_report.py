@@ -628,12 +628,14 @@ class TestGapReportEndpointStateGuard:
         _base_repo = marks_repo
 
         class _PatchedMarksRepo(InMemoryQuestionMarkRepository):
-            def get_submission_id_for_cycle(self, cid: uuid.UUID) -> uuid.UUID | None:
-                if cid == _cycle_id:
+            def get_submission_id_for_cycle(self, cid: uuid.UUID, variant: str) -> uuid.UUID | None:
+                if cid == _cycle_id and variant == "A":
                     return _submission_id
                 return None
 
-            def list_for_cycle(self, cid: uuid.UUID) -> list[QuestionMark]:
+            def list_for_cycle(self, cid: uuid.UUID, variant: str) -> list[QuestionMark]:
+                if variant != "A":
+                    return []
                 return _base_repo.list_for_submission(_submission_id)
 
         patched_marks_repo = _PatchedMarksRepo()

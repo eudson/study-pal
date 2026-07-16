@@ -310,3 +310,68 @@ reference — the deferred child on-screen practice view MUST strip them server-
 
 **Next:** Variant B retest + A/B comparison (loop tail); live Claude (C4); Fixtures E1; Supabase
 Storage for photos/scope; scoped child session token.
+
+---
+
+## 2026-07-16 — Variant B retest + A/B comparison (Week 6 loop tail — CLOSES THE LOOP)
+
+Autonomous `/goal` session (architect away). Driver-orchestrated; backend by the backend
+agent, `web/` by the frontend + uiux agents, planning/verification/decisions by the driver
+with a read-only **advisor** review before build (verdict REVISE → all conditions met).
+FakeClaude/FakeGrader throughout (live Claude C4 still deferred). Decisions logged in
+ARCHITECTURE §10 "Decisions made in absence — pending review".
+
+**Assessment first.** Baseline confirmed green (357 passed). Triaged the remaining work: the
+one large *autonomously buildable* item was the Variant B tail (the transition edges
+`STUDY_PACK_DONE → GENERATING_B → CYCLE_COMPLETE` existed in `_ALLOWED` but had no service
+fns, router, generation, or UI). Live Claude (C4) and Fixtures E1 confirmed **blocked on the
+architect** (placeholder API key; empty `fixtures/*/inputs` — no source artefacts). Supabase
+Storage + scoped child session token remain deferred.
+
+**What shipped (all on `main`-to-be, all green):**
+- **Backend (`api/`).** Two cycle service fns (`advance_to_generating_b`,
+  `advance_to_cycle_complete`) — §5 state machine UNCHANGED (no new enum states; B's whole
+  capture→mark→review sub-loop runs under the single `GENERATING_B` state, sub-phase inferred
+  from data presence). `GenerationService.generate_variant_b(VariantBRequest)` on FakeClaude +
+  versioned prompt `generate_variant_b_v1.md` → a `variant="B"` assessment (structure preserved,
+  all values changed, `gap_tags` retargeted), stored as a SECOND assessment row (no migration —
+  `assessments` already supports 2 variants/cycle). Pure `derive_ab_comparison(gap_a, gap_b)`
+  + `ABComparison` schema, matching on `gap_tags` (B has new qids) → closed / persisting / new.
+  New `routers/variant_b.py` (8 endpoints: generate / capture / submit / grade / marks / review /
+  comparison / complete) — dedicated B endpoints reuse the pure services; the Variant-A endpoints
+  are byte-for-byte unchanged, so B cannot corrupt A's *published* marks by construction.
+  `question_marks` cycle queries are now **variant-explicit** (`list_for_cycle(cycle_id, variant)`,
+  `get_submission_id_for_cycle(cycle_id, variant)`) — never recency-inferred; every A caller passes
+  `"A"`. B's gap report is derived **in-memory** (not stored → no `gap_reports` migration).
+- **Frontend (`web/`).** `make codegen` (8 new SDK fns + `ABComparison`, idempotent/hash-stable).
+  Variant B capture + mark-review **reuse the Weeks 3–5 components UNCHANGED** via a `?variant=a|b`
+  search param on the existing `capture/$cycleId.tsx` and `$cycleId.review.tsx` (defaults to `a` —
+  every existing A link behaves identically; leaf question/mark components untouched). New
+  `$cycleId.comparison.tsx` mirrors the gap-report screen: Closed (teal/`--success`), Still growing
+  + New (plum/`--growing`, never red), an A→B score card, and a "Complete cycle" gate →
+  `CYCLE_COMPLETE`. Dispatcher branches added for `STUDY_PACK_DONE` ("Start Variant B retest"),
+  `GENERATING_B` (B sub-flow menu), `CYCLE_COMPLETE` (read-only comparison).
+- **uiux conformance sweep: PASS, zero fixes** — no red in diagnostic data, tokens-only
+  (**zero new tokens**), correct Fredoka/Atkinson typography, visually consistent with gap-report.
+
+**Verification** — `make lint` clean (ruff + format + mypy on `api`; tsc + eslint on `web`);
+`make test` **378 passed** / 38 DB-skipped / 2 fixture-gate deselected (E1 still intentionally red,
+untouched); `make codegen` idempotent (hash-verified); `pnpm build` clean. New tests incl. the
+**A+B coexistence gate** (advisor guardrail: A and B marks provably never bleed together),
+comparison partitioning (incl. half-marks), generation determinism/gap-tag propagation, and full
+variant_b router authz/state/happy-path (generate → capture → submit → grade → review → comparison
+→ complete → `CYCLE_COMPLETE`). **No migration** this session. Not yet run: live Supabase smoke /
+in-browser click-through (prior sessions did these against eu-west-1; this session verified via the
+in-memory + gate tiers only — flagged for the architect's live pass).
+
+**Deferred debt (logged, non-blocking, in ARCHITECTURE §10):** (a) storing B's gap report would
+need a `variant` column + `UNIQUE(cycle_id, variant)` migration; (b) explicit B-phase `*_B` states
+as a possible future §5 refinement. **Carried token flag (unchanged):** `StampWall.stampLabel`
+hardcodes `14px` — candidate `--fs-stamp-label`.
+
+**Milestone:** the full diagnostic loop is now app-orchestrated end-to-end,
+`SCOPE_UPLOADED → CYCLE_COMPLETE`, on FakeClaude — build-plan Week 6 milestone met.
+
+**Next (all blocked-on-architect or deferred):** live Claude (C4 — needs real API key + go-ahead);
+Fixtures E1 (needs the 5 historical source artefacts); Supabase Storage for photos/scope; scoped
+child session token; a live eu-west-1 smoke + in-browser click-through of the Variant B tail.

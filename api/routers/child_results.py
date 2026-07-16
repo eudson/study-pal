@@ -138,7 +138,7 @@ def get_child_results(
     variant_a = next((a for a in cycle.assessments if a.variant == "A"), None)
 
     # Guard 5b: resolve marks.
-    marks = marks_repo.list_for_cycle(cycle_id)
+    marks = marks_repo.list_for_cycle(cycle_id, "A")
     if not marks:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -146,7 +146,7 @@ def get_child_results(
         )
 
     # Guard 5c: resolve submission responses for render_child_answer.
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id)
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
     responses: list[ChildResponseItem] = []
     if submission_id is not None:
         responses = _get_responses(submission_repo, submission_id)

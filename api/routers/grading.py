@@ -124,7 +124,7 @@ def grade_submission_endpoint(
 
     # Resolve the submission for this cycle via the marks repo JOIN query.
     # Returns None if no submission exists yet.
-    submission_id_from_repo = marks_repo.get_submission_id_for_cycle(cycle_id)
+    submission_id_from_repo = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
 
     if submission_id_from_repo is None:
         raise HTTPException(
@@ -222,14 +222,14 @@ def list_question_marks(
         )
 
     # Resolve the submission_id for this cycle.
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id)
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
     if submission_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No graded submission found for this cycle.",
         )
 
-    raw_marks = marks_repo.list_for_cycle(cycle_id)
+    raw_marks = marks_repo.list_for_cycle(cycle_id, "A")
 
     # Fetch child responses for rendering child_answer_rendered.
     child_responses: list[ChildResponseItem] = _get_responses(submission_repo, submission_id)

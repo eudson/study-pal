@@ -121,7 +121,7 @@ def generate_gap_report(
         )
 
     # Resolve marks.
-    marks = marks_repo.list_for_cycle(cycle_id)
+    marks = marks_repo.list_for_cycle(cycle_id, "A")
     if not marks:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -129,7 +129,7 @@ def generate_gap_report(
         )
 
     # Resolve submission_id (needed for the gap_reports row FK).
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id)
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
     if submission_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from schemas.assessment_schema import Assessment
+from schemas.assessment_schema import Assessment, ErrorCategory, GapRetarget
 from schemas.gap_report import (
     GapReport,
     GapReportItem,
@@ -126,3 +126,48 @@ def derive_gap_report(
         summary=summary,
         derived_at=datetime.now(tz=UTC),
     )
+
+
+# ---------------------------------------------------------------------------
+# Week 6 — Variant B retargeting: GapReport -> GapRetarget list
+# ---------------------------------------------------------------------------
+
+
+def build_gap_retargets(report: GapReport) -> list[GapRetarget]:
+    """Derive ``VariantBRequest.gaps`` from a GapReport's growing items.
+
+    Pure, deterministic — no I/O. Groups growing items by ``gap_tag`` (one
+    ``GapRetarget`` per distinct tag, sorted for stable ordering) since a
+    single gap concept can span multiple questions.
+
+    ``category`` is the first non-null ``error_category`` among items sharing
+    the tag; falls back to ``ErrorCategory.CONCEPT_GAP`` when none of the
+    growing items sharing this tag were categorised by the parent — the gap
+    is still deliberately retested, just uncategorised.
+    """
+    growing = [it for it in report.items if it.status == GapStatus.GROWING]
+
+    items_by_tag: dict[str, list[GapReportItem]] = {}
+    for item in growing:
+        for tag in item.gap_tags:
+            items_by_tag.setdefault(tag, []).append(item)
+
+    retargets: list[GapRetarget] = []
+    for tag in sorted(items_by_tag):
+        items = items_by_tag[tag]
+        category = next(
+            (ErrorCategory(it.error_category) for it in items if it.error_category is not None),
+            ErrorCategory.CONCEPT_GAP,
+        )
+        descriptions = sorted({it.text for it in items})
+        description = "; ".join(descriptions)[:500] or f"Retest gap tag '{tag}'."
+        source_question_ids = sorted({it.question_id for it in items})
+        retargets.append(
+            GapRetarget(
+                gap_id=tag,
+                category=category,
+                description=description,
+                source_question_ids=source_question_ids,
+            )
+        )
+    return retargets

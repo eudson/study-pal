@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listQuestionMarks,
   reviewQuestionMark,
+  getVariantBMarks,
+  reviewVariantBMark,
 } from "../../api/sdk.gen";
 import type {
   QuestionMarkWithContext,
@@ -15,7 +17,14 @@ import { StickerButton } from "../../components/StickerButton";
 import { Chip } from "../../components/Chip";
 import styles from "./-review.module.css";
 
+/**
+ * `?variant=b` drives this exact same mark-review UI (ReviewRow/MarkEditor
+ * unchanged) against the Variant B retest marks (Week 6). Defaults to "a".
+ */
 export const Route = createFileRoute("/cycles/$cycleId/review")({
+  validateSearch: (search: Record<string, unknown>): { variant?: "a" | "b" } => ({
+    variant: search.variant === "b" ? "b" : undefined,
+  }),
   component: ReviewPage,
 });
 
@@ -148,11 +157,13 @@ function MarkEditor({ value, max, isPending, onChange }: MarkEditorProps) {
 interface ReviewRowProps {
   item: QuestionMarkWithContext;
   cycleId: string;
+  variant: "a" | "b";
   onMarkUpdated: (updatedMark: QuestionMark) => void;
 }
 
-function ReviewRow({ item, cycleId, onMarkUpdated }: ReviewRowProps) {
+function ReviewRow({ item, cycleId, variant, onMarkUpdated }: ReviewRowProps) {
   const { mark, question } = item;
+  const isVariantB = variant === "b";
   const marksTotal = parseDecimal(question.marks_total);
   // Effective displayed mark: final_marks if set, else suggested_marks
   const effectiveMarks = parseDecimal(
@@ -166,7 +177,8 @@ function ReviewRow({ item, cycleId, onMarkUpdated }: ReviewRowProps) {
 
   const mutation = useMutation({
     mutationFn: async (finalMarks: number) => {
-      const res = await reviewQuestionMark({
+      const reviewFn = isVariantB ? reviewVariantBMark : reviewQuestionMark;
+      const res = await reviewFn({
         path: { cycle_id: cycleId, question_id: question.qid },
         body: { final_marks: finalMarks },
       });
@@ -181,7 +193,8 @@ function ReviewRow({ item, cycleId, onMarkUpdated }: ReviewRowProps) {
 
   const markAsGrowing = useMutation({
     mutationFn: async () => {
-      const res = await reviewQuestionMark({
+      const reviewFn = isVariantB ? reviewVariantBMark : reviewQuestionMark;
+      const res = await reviewFn({
         path: { cycle_id: cycleId, question_id: question.qid },
         body: { final_marks: 0, error_category: "concept_gap" },
       });
@@ -294,18 +307,26 @@ function ReviewRow({ item, cycleId, onMarkUpdated }: ReviewRowProps) {
 
 function ReviewPage() {
   const { cycleId } = Route.useParams();
+  const { variant: searchVariant } = Route.useSearch();
+  const variant: "a" | "b" = searchVariant ?? "a";
+  const isVariantB = variant === "b";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  // Fetch marks list
+  const marksQueryKey = ["marks", cycleId, variant];
+
+  // Fetch marks list — variant B points at the sibling variant-b endpoint
+  // but reuses this exact ReviewRow/MarkEditor UI.
   const {
     data: marksData,
     isLoading: marksLoading,
     error: marksError,
   } = useQuery({
-    queryKey: ["marks", cycleId],
+    queryKey: marksQueryKey,
     queryFn: async () => {
-      const res = await listQuestionMarks({ path: { cycle_id: cycleId } });
+      const res = isVariantB
+        ? await getVariantBMarks({ path: { cycle_id: cycleId } })
+        : await listQuestionMarks({ path: { cycle_id: cycleId } });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("No marks data");
       return res.data;
@@ -316,7 +337,7 @@ function ReviewPage() {
   const handleMarkUpdated = useCallback(
     (updatedMark: QuestionMark) => {
       qc.setQueryData(
-        ["marks", cycleId],
+        ["marks", cycleId, variant],
         (prev: typeof marksData) => {
           if (!prev) return prev;
           return {
@@ -333,7 +354,7 @@ function ReviewPage() {
       void qc.invalidateQueries({ queryKey: ["cycle", cycleId] });
       void qc.invalidateQueries({ queryKey: ["cycles"] });
     },
-    [qc, cycleId],
+    [qc, cycleId, variant],
   );
 
   const [unresolvedIds, setUnresolvedIds] = React.useState<string[] | null>(null);
@@ -355,10 +376,20 @@ function ReviewPage() {
       return;
     }
     setUnresolvedIds(null);
-    void navigate({
-      to: "/cycles/$cycleId/publish",
-      params: { cycleId },
-    });
+    // Variant A goes through the publish/visibility gate; Variant B has
+    // already been published once (Variant A) — its marks feed straight
+    // into the A-vs-B comparison, no separate visibility gate.
+    if (isVariantB) {
+      void navigate({
+        to: "/cycles/$cycleId/comparison",
+        params: { cycleId },
+      });
+    } else {
+      void navigate({
+        to: "/cycles/$cycleId/publish",
+        params: { cycleId },
+      });
+    }
   };
 
   if (marksLoading) {
@@ -393,7 +424,9 @@ function ReviewPage() {
             ‹
           </button>
           <div>
-            <div className={styles.pageTitle}>Review marks</div>
+            <div className={styles.pageTitle}>
+              {isVariantB ? "Review retest marks" : "Review marks"}
+            </div>
             {/* Colour + label both carry meaning (DESIGN §2 — never colour-only). */}
             <div className={styles.summaryLine}>
               <span className={styles.summaryAuto}>Auto-marked {autoMarked}</span>
@@ -415,6 +448,7 @@ function ReviewPage() {
               key={item.mark.question_id}
               item={item}
               cycleId={cycleId}
+              variant={variant}
               onMarkUpdated={handleMarkUpdated}
             />
           ))
@@ -425,8 +459,8 @@ function ReviewPage() {
       {unresolvedIds && unresolvedIds.length > 0 && (
         <div className={styles.warningBox} role="alert">
           {unresolvedIds.length === 1
-            ? "1 question still needs a mark before you can publish."
-            : `${unresolvedIds.length} questions still need marks before you can publish.`}
+            ? `1 question still needs a mark before you can ${isVariantB ? "view the comparison" : "publish"}.`
+            : `${unresolvedIds.length} questions still need marks before you can ${isVariantB ? "view the comparison" : "publish"}.`}
         </div>
       )}
 
@@ -435,7 +469,7 @@ function ReviewPage() {
         className={styles.ctaFull}
         onClick={handleContinue}
       >
-        Continue to publish
+        {isVariantB ? "Continue to comparison" : "Continue to publish"}
       </StickerButton>
     </div>
   );

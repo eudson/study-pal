@@ -145,10 +145,13 @@ class PostgresQuestionMarkRepository:
     def list_for_cycle(
         self,
         cycle_id: uuid.UUID,
+        variant: str,
     ) -> list[QuestionMark]:
-        """Return all marks for the most recent submission of a cycle.
+        """Return all marks for the cycle's submission of the given variant.
 
-        Joins through submissions → assessments to find the cycle's submission.
+        Joins through submissions → assessments to find the cycle's submission,
+        filtered explicitly by ``a.variant`` (Week 6 guardrail: never inferred
+        by recency — Variant A and Variant B marks must never bleed together).
         """
         cur = self._conn.cursor()
         cur.execute(
@@ -161,27 +164,32 @@ class PostgresQuestionMarkRepository:
             FROM question_marks qm
             JOIN submissions s ON s.id = qm.submission_id
             JOIN assessments a ON a.id = s.assessment_id
-            WHERE a.cycle_id = %s
+            WHERE a.cycle_id = %s AND a.variant = %s
             ORDER BY qm.created_at
             """,
-            (str(cycle_id),),
+            (str(cycle_id), variant),
         )
         rows = cur.fetchall()
         return [_row_to_mark(row) for row in rows]
 
-    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None:
-        """Find the submission_id for a cycle (returns the most recent one)."""
+    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID, variant: str) -> uuid.UUID | None:
+        """Find the submission_id for a cycle's given variant (most recent match).
+
+        ``variant`` is explicit — never inferred by recency. There is only one
+        submission per variant per cycle in practice; ORDER BY + LIMIT 1 is a
+        harmless defensive tie-breaker, not a variant-selection mechanism.
+        """
         cur = self._conn.cursor()
         cur.execute(
             """
             SELECT s.id
             FROM submissions s
             JOIN assessments a ON a.id = s.assessment_id
-            WHERE a.cycle_id = %s
+            WHERE a.cycle_id = %s AND a.variant = %s
             ORDER BY s.created_at DESC
             LIMIT 1
             """,
-            (str(cycle_id),),
+            (str(cycle_id), variant),
         )
         row = cur.fetchone()
         if row is None:

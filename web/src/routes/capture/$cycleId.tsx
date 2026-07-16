@@ -19,6 +19,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getCaptureView,
   createSubmission,
+  getVariantBCaptureView,
+  createVariantBSubmission,
+  gradeVariantB,
   getCycle,
   listSubjects,
 } from "../../api/sdk.gen";
@@ -68,7 +71,17 @@ import type {
 import styles from "./-capture.module.css";
 import shellStyles from "../../components/capture/QuestionShell.module.css";
 
+/**
+ * Search-param variant selector. `?variant=b` drives the exact same capture
+ * flow/components against the Variant B endpoints (Week 6 retest) — no
+ * child-facing component below is aware of the distinction, only the data
+ * source functions differ. Defaults to "a" so the existing A flow/URL is
+ * unchanged.
+ */
 export const Route = createFileRoute("/capture/$cycleId")({
+  validateSearch: (search: Record<string, unknown>): { variant?: "a" | "b" } => ({
+    variant: search.variant === "b" ? "b" : undefined,
+  }),
   component: CapturePage,
 });
 
@@ -164,6 +177,9 @@ function isAttempted(q: ChildQuestionView, payload: CapturePayload): boolean {
 
 function CapturePage() {
   const { cycleId } = Route.useParams();
+  const { variant: searchVariant } = Route.useSearch();
+  const variant: "a" | "b" = searchVariant ?? "a";
+  const isVariantB = variant === "b";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -189,20 +205,23 @@ function CapturePage() {
     enabled: !!cycle,
   });
 
-  // Fetch the capture view (memo-free child assessment)
+  // Fetch the capture view (memo-free child assessment). Variant B points at
+  // the sibling variant-b endpoint but drives the exact same components.
   const {
     data: captureView,
     isLoading: captureLoading,
     error: captureError,
   } = useQuery({
-    queryKey: ["captureView", cycleId],
+    queryKey: ["captureView", cycleId, variant],
     queryFn: async () => {
-      const res = await getCaptureView({ path: { cycle_id: cycleId } });
+      const res = isVariantB
+        ? await getVariantBCaptureView({ path: { cycle_id: cycleId } })
+        : await getCaptureView({ path: { cycle_id: cycleId } });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("Capture view not available");
       return res.data;
     },
-    enabled: !!cycle && cycle.state === "APPROVED_PRINTED",
+    enabled: !!cycle && (isVariantB ? cycle.state === "GENERATING_B" : cycle.state === "APPROVED_PRINTED"),
   });
 
   // Resolve child_id: subject whose id matches cycle.subject_id → subject.child_id
@@ -281,21 +300,34 @@ function CapturePage() {
         };
       });
 
-      const res = await createSubmission({
-        path: { cycle_id: cycleId },
-        body: {
-          child_id: childId,
-          responses: responseList,
-          proof_photo_paths: [], // Storage upload deferred — Phase 2
-        },
-      });
+      const submissionBody = {
+        child_id: childId,
+        responses: responseList,
+        proof_photo_paths: [], // Storage upload deferred — Phase 2
+      };
+      const res = isVariantB
+        ? await createVariantBSubmission({ path: { cycle_id: cycleId }, body: submissionBody })
+        : await createSubmission({ path: { cycle_id: cycleId }, body: submissionBody });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("Submission failed");
+
+      // Variant B has no automatic state-machine advance on submission —
+      // grading must be triggered explicitly (Variant A's AUTO_MARKED
+      // transition happens server-side on submission; B stays in
+      // GENERATING_B throughout, so we drive the grade step here).
+      if (isVariantB) {
+        const gradeRes = await gradeVariantB({ path: { cycle_id: cycleId } });
+        if (gradeRes.error) throw gradeRes.error;
+      }
+
       return res.data;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["cycle", cycleId] });
       void qc.invalidateQueries({ queryKey: ["cycles"] });
+      if (isVariantB) {
+        void qc.invalidateQueries({ queryKey: ["marks", cycleId, "b"] });
+      }
       setSubmitted(true);
     },
     onError: (err: unknown) => {
@@ -328,7 +360,11 @@ function CapturePage() {
     );
   }
 
-  if (cycle && cycle.state !== "APPROVED_PRINTED" && cycle.state !== "ANSWERS_ENTERED") {
+  const cycleReady = isVariantB
+    ? cycle?.state === "GENERATING_B"
+    : cycle?.state === "APPROVED_PRINTED" || cycle?.state === "ANSWERS_ENTERED";
+
+  if (cycle && !cycleReady) {
     return (
       <div className={styles.errorShell} data-mode="child">
         <h1 className={styles.errorHeading}>Not ready yet</h1>

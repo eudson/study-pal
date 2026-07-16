@@ -186,13 +186,13 @@ class _PatchedMarksRepo(InMemoryQuestionMarkRepository):
         # Copy the store from the base repo.
         self._store = base._store
 
-    def get_submission_id_for_cycle(self, cid: uuid.UUID) -> uuid.UUID | None:
-        if cid == self._cycle_id:
+    def get_submission_id_for_cycle(self, cid: uuid.UUID, variant: str) -> uuid.UUID | None:
+        if cid == self._cycle_id and variant == "A":
             return self._submission_id
         return None
 
-    def list_for_cycle(self, cid: uuid.UUID) -> list[QuestionMark]:
-        if cid == self._cycle_id:
+    def list_for_cycle(self, cid: uuid.UUID, variant: str) -> list[QuestionMark]:
+        if cid == self._cycle_id and variant == "A":
             return self._base.list_for_submission(self._submission_id)
         return []
 

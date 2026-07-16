@@ -5,6 +5,84 @@ export type ClientOptions = {
 };
 
 /**
+ * ABComparison
+ *
+ * Full A-vs-B comparison for a cycle.
+ *
+ * - ``closed``: gap_tags that were growing in Variant A and are NOT growing
+ * in Variant B — the child has mastered this gap.
+ * - ``persisting``: gap_tags growing in BOTH variants — still a gap.
+ * - ``new``: gap_tags growing in Variant B that were NOT growing in Variant A
+ * — a newly surfaced gap (can happen since Variant B's questions differ).
+ *
+ * Deterministic ordering: each list is sorted by ``gap_tag`` for a stable
+ * API response (``services/comparison.py``).
+ */
+export type AbComparison = {
+    /**
+     * Cycle Id
+     */
+    cycle_id: string;
+    /**
+     * Closed
+     */
+    closed?: Array<GapDelta>;
+    /**
+     * Persisting
+     */
+    persisting?: Array<GapDelta>;
+    /**
+     * New
+     */
+    new?: Array<GapDelta>;
+    summary: AbComparisonSummary;
+};
+
+/**
+ * ABComparisonSummary
+ *
+ * Aggregate counts + score comparison for the A-vs-B retest.
+ */
+export type AbComparisonSummary = {
+    /**
+     * Closed Count
+     */
+    closed_count: number;
+    /**
+     * Persisting Count
+     */
+    persisting_count: number;
+    /**
+     * New Count
+     */
+    new_count: number;
+    /**
+     * Score A
+     *
+     * Total marks earned on Variant A.
+     */
+    score_a: string;
+    /**
+     * Score A Total
+     *
+     * Total marks available on Variant A.
+     */
+    score_a_total: string;
+    /**
+     * Score B
+     *
+     * Total marks earned on Variant B.
+     */
+    score_b: string;
+    /**
+     * Score B Total
+     *
+     * Total marks available on Variant B.
+     */
+    score_b_total: string;
+};
+
+/**
  * Assessment
  */
 export type Assessment = {
@@ -879,6 +957,32 @@ export type FillBlankAnswer = {
      * Blanks
      */
     blanks: Array<Blank>;
+};
+
+/**
+ * GapDelta
+ *
+ * One gap_tag's before/after status in the A-vs-B comparison.
+ *
+ * ``description`` is a human-readable label derived from the tag itself —
+ * there is no separate lookup table guaranteed to exist server-side.
+ * ``error_category`` is the ErrorCategory value (if any) associated with
+ * this tag in the contributing report(s); may be null when no growing item
+ * carrying this tag was ever categorised by the parent.
+ */
+export type GapDelta = {
+    /**
+     * Gap Tag
+     */
+    gap_tag: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Error Category
+     */
+    error_category?: string | null;
 };
 
 /**
@@ -3165,3 +3269,247 @@ export type GetChildResultsResponses = {
 };
 
 export type GetChildResultsResponse = GetChildResultsResponses[keyof GetChildResultsResponses];
+
+export type GenerateVariantBData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/variant-b';
+};
+
+export type GenerateVariantBErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GenerateVariantBError = GenerateVariantBErrors[keyof GenerateVariantBErrors];
+
+export type GenerateVariantBResponses = {
+    /**
+     * Successful Response
+     */
+    201: Assessment;
+};
+
+export type GenerateVariantBResponse = GenerateVariantBResponses[keyof GenerateVariantBResponses];
+
+export type GetVariantBCaptureViewData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/variant-b/capture';
+};
+
+export type GetVariantBCaptureViewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetVariantBCaptureViewError = GetVariantBCaptureViewErrors[keyof GetVariantBCaptureViewErrors];
+
+export type GetVariantBCaptureViewResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChildAssessmentView;
+};
+
+export type GetVariantBCaptureViewResponse = GetVariantBCaptureViewResponses[keyof GetVariantBCaptureViewResponses];
+
+export type CreateVariantBSubmissionData = {
+    body: SubmissionCreate;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/variant-b/submissions';
+};
+
+export type CreateVariantBSubmissionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateVariantBSubmissionError = CreateVariantBSubmissionErrors[keyof CreateVariantBSubmissionErrors];
+
+export type CreateVariantBSubmissionResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubmissionResponse;
+};
+
+export type CreateVariantBSubmissionResponse = CreateVariantBSubmissionResponses[keyof CreateVariantBSubmissionResponses];
+
+export type GradeVariantBData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/variant-b/grade';
+};
+
+export type GradeVariantBErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GradeVariantBError = GradeVariantBErrors[keyof GradeVariantBErrors];
+
+export type GradeVariantBResponses = {
+    /**
+     * Successful Response
+     */
+    200: GradeSubmissionResponse;
+};
+
+export type GradeVariantBResponse = GradeVariantBResponses[keyof GradeVariantBResponses];
+
+export type GetVariantBMarksData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/variant-b/marks';
+};
+
+export type GetVariantBMarksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetVariantBMarksError = GetVariantBMarksErrors[keyof GetVariantBMarksErrors];
+
+export type GetVariantBMarksResponses = {
+    /**
+     * Successful Response
+     */
+    200: ListMarksWithContextResponse;
+};
+
+export type GetVariantBMarksResponse = GetVariantBMarksResponses[keyof GetVariantBMarksResponses];
+
+export type ReviewVariantBMarkData = {
+    body: MarkPatchRequest;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+        /**
+         * Question Id
+         */
+        question_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/variant-b/marks/{question_id}';
+};
+
+export type ReviewVariantBMarkErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ReviewVariantBMarkError = ReviewVariantBMarkErrors[keyof ReviewVariantBMarkErrors];
+
+export type ReviewVariantBMarkResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarkPatchResponse;
+};
+
+export type ReviewVariantBMarkResponse = ReviewVariantBMarkResponses[keyof ReviewVariantBMarkResponses];
+
+export type GetAbComparisonData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/comparison';
+};
+
+export type GetAbComparisonErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAbComparisonError = GetAbComparisonErrors[keyof GetAbComparisonErrors];
+
+export type GetAbComparisonResponses = {
+    /**
+     * Successful Response
+     */
+    200: AbComparison;
+};
+
+export type GetAbComparisonResponse = GetAbComparisonResponses[keyof GetAbComparisonResponses];
+
+export type CompleteCycleData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/complete';
+};
+
+export type CompleteCycleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CompleteCycleError = CompleteCycleErrors[keyof CompleteCycleErrors];
+
+export type CompleteCycleResponses = {
+    /**
+     * Successful Response
+     */
+    200: CycleResponse;
+};
+
+export type CompleteCycleResponse = CompleteCycleResponses[keyof CompleteCycleResponses];

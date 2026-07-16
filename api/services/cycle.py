@@ -14,6 +14,8 @@ Implemented transitions:
     PARENT_REVIEW_MARKS → GAP_REPORT         (publish gate — child-visible, parent approval)
     GAP_REPORT → GENERATING_STUDY_PACK
     GENERATING_STUDY_PACK → STUDY_PACK_DONE
+    STUDY_PACK_DONE → GENERATING_B
+    GENERATING_B → CYCLE_COMPLETE
 """
 
 from __future__ import annotations
@@ -222,6 +224,38 @@ def advance_to_study_pack_done(
     cycle = _require_cycle(repo, cycle_id)
     _assert_transition(cycle.state, CycleState.STUDY_PACK_DONE)
     return repo.update_cycle_state(cycle_id, CycleState.STUDY_PACK_DONE)
+
+
+def advance_to_generating_b(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """STUDY_PACK_DONE → GENERATING_B.
+
+    Called when Variant B generation is kicked off (Week 6 retest tail).
+    Not a child-visible gate — Variant B results are deferred (nothing
+    child-visible in v1); no parent_approval_at is recorded here.
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.GENERATING_B)
+    return repo.update_cycle_state(cycle_id, CycleState.GENERATING_B)
+
+
+def advance_to_cycle_complete(
+    repo: FamilyRepository,
+    cycle_id: uuid.UUID,
+) -> CycleResponse:
+    """GENERATING_B → CYCLE_COMPLETE.
+
+    Terminal transition for the cycle. Called once Variant B has been fully
+    captured, graded, reviewed, and the A-vs-B comparison is derivable.
+    CYCLE_COMPLETE publishes nothing new to the child, so golden rule 8
+    (child-visible transitions require recorded parent approval) is not
+    triggered here — no parent_approval_at is recorded.
+    """
+    cycle = _require_cycle(repo, cycle_id)
+    _assert_transition(cycle.state, CycleState.CYCLE_COMPLETE)
+    return repo.update_cycle_state(cycle_id, CycleState.CYCLE_COMPLETE)
 
 
 # ---------------------------------------------------------------------------

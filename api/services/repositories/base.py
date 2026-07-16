@@ -176,9 +176,20 @@ class QuestionMarkRepository(Protocol):
 
     def list_for_submission(self, submission_id: uuid.UUID) -> list[QuestionMark]: ...
 
-    def list_for_cycle(self, cycle_id: uuid.UUID) -> list[QuestionMark]: ...
+    def list_for_cycle(self, cycle_id: uuid.UUID, variant: str) -> list[QuestionMark]:
+        """Return all marks for the cycle's submission of the given variant ("A" or "B").
 
-    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID) -> uuid.UUID | None: ...
+        ``variant`` is always explicit — never inferred by recency — so Variant A
+        and Variant B marks can never bleed into each other (Week 6 guardrail).
+        """
+        ...
+
+    def get_submission_id_for_cycle(self, cycle_id: uuid.UUID, variant: str) -> uuid.UUID | None:
+        """Find the submission_id for a cycle's given variant ("A" or "B").
+
+        ``variant`` is always explicit — never inferred by recency.
+        """
+        ...
 
     def get_mark(
         self,

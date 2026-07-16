@@ -18,6 +18,7 @@ from routers import (
     health,
     review,
     study_pack,
+    variant_b,
 )
 
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(gap_report.router)
     app.include_router(study_pack.router)
     app.include_router(child_results.router)
+    app.include_router(variant_b.router)
 
     return app
 

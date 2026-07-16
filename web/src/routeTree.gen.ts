@@ -21,6 +21,7 @@ import { Route as CyclesCycleIdStudyPackRouteImport } from './routes/cycles/$cyc
 import { Route as CyclesCycleIdReviewRouteImport } from './routes/cycles/$cycleId.review'
 import { Route as CyclesCycleIdPublishRouteImport } from './routes/cycles/$cycleId.publish'
 import { Route as CyclesCycleIdGapReportRouteImport } from './routes/cycles/$cycleId.gap-report'
+import { Route as CyclesCycleIdComparisonRouteImport } from './routes/cycles/$cycleId.comparison'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -82,6 +83,11 @@ const CyclesCycleIdGapReportRoute = CyclesCycleIdGapReportRouteImport.update({
   path: '/gap-report',
   getParentRoute: () => CyclesCycleIdRoute,
 } as any)
+const CyclesCycleIdComparisonRoute = CyclesCycleIdComparisonRouteImport.update({
+  id: '/comparison',
+  path: '/comparison',
+  getParentRoute: () => CyclesCycleIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/cycles/new': typeof CyclesNewRoute
   '/results/$cycleId': typeof ResultsCycleIdRoute
   '/settings/': typeof SettingsIndexRoute
+  '/cycles/$cycleId/comparison': typeof CyclesCycleIdComparisonRoute
   '/cycles/$cycleId/gap-report': typeof CyclesCycleIdGapReportRoute
   '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
   '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/cycles/new': typeof CyclesNewRoute
   '/results/$cycleId': typeof ResultsCycleIdRoute
   '/settings': typeof SettingsIndexRoute
+  '/cycles/$cycleId/comparison': typeof CyclesCycleIdComparisonRoute
   '/cycles/$cycleId/gap-report': typeof CyclesCycleIdGapReportRoute
   '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
   '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/cycles/new': typeof CyclesNewRoute
   '/results/$cycleId': typeof ResultsCycleIdRoute
   '/settings/': typeof SettingsIndexRoute
+  '/cycles/$cycleId/comparison': typeof CyclesCycleIdComparisonRoute
   '/cycles/$cycleId/gap-report': typeof CyclesCycleIdGapReportRoute
   '/cycles/$cycleId/publish': typeof CyclesCycleIdPublishRoute
   '/cycles/$cycleId/review': typeof CyclesCycleIdReviewRoute
@@ -135,6 +144,7 @@ export interface FileRouteTypes {
     | '/cycles/new'
     | '/results/$cycleId'
     | '/settings/'
+    | '/cycles/$cycleId/comparison'
     | '/cycles/$cycleId/gap-report'
     | '/cycles/$cycleId/publish'
     | '/cycles/$cycleId/review'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/cycles/new'
     | '/results/$cycleId'
     | '/settings'
+    | '/cycles/$cycleId/comparison'
     | '/cycles/$cycleId/gap-report'
     | '/cycles/$cycleId/publish'
     | '/cycles/$cycleId/review'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/cycles/new'
     | '/results/$cycleId'
     | '/settings/'
+    | '/cycles/$cycleId/comparison'
     | '/cycles/$cycleId/gap-report'
     | '/cycles/$cycleId/publish'
     | '/cycles/$cycleId/review'
@@ -268,10 +280,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CyclesCycleIdGapReportRouteImport
       parentRoute: typeof CyclesCycleIdRoute
     }
+    '/cycles/$cycleId/comparison': {
+      id: '/cycles/$cycleId/comparison'
+      path: '/comparison'
+      fullPath: '/cycles/$cycleId/comparison'
+      preLoaderRoute: typeof CyclesCycleIdComparisonRouteImport
+      parentRoute: typeof CyclesCycleIdRoute
+    }
   }
 }
 
 interface CyclesCycleIdRouteChildren {
+  CyclesCycleIdComparisonRoute: typeof CyclesCycleIdComparisonRoute
   CyclesCycleIdGapReportRoute: typeof CyclesCycleIdGapReportRoute
   CyclesCycleIdPublishRoute: typeof CyclesCycleIdPublishRoute
   CyclesCycleIdReviewRoute: typeof CyclesCycleIdReviewRoute
@@ -279,6 +299,7 @@ interface CyclesCycleIdRouteChildren {
 }
 
 const CyclesCycleIdRouteChildren: CyclesCycleIdRouteChildren = {
+  CyclesCycleIdComparisonRoute: CyclesCycleIdComparisonRoute,
   CyclesCycleIdGapReportRoute: CyclesCycleIdGapReportRoute,
   CyclesCycleIdPublishRoute: CyclesCycleIdPublishRoute,
   CyclesCycleIdReviewRoute: CyclesCycleIdReviewRoute,
