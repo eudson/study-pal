@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from schemas.assessment_schema import Assessment
 
@@ -53,6 +53,91 @@ class CycleState(StrEnum):
     STUDY_PACK_DONE = "STUDY_PACK_DONE"
     GENERATING_B = "GENERATING_B"
     CYCLE_COMPLETE = "CYCLE_COMPLETE"
+
+
+# ---------------------------------------------------------------------------
+# CyclePhase — generic (round, phase) axis
+# (docs/design/round-phase-architecture.md §2, §4).
+#
+# `CycleState` remains the DRIVER of all state-machine logic in P1 (this
+# phase is schema/migration foundation only — see the design doc's phased
+# rollout §7).  `round` + `phase` are additive and derived from `state`;
+# they must never disagree with `state`.  Logic migrates to (round, phase)
+# in P2.
+# ---------------------------------------------------------------------------
+
+
+class CyclePhase(StrEnum):
+    SCOPE_UPLOADED = "SCOPE_UPLOADED"
+    GENERATING = "GENERATING"
+    DRAFT_REVIEW = "DRAFT_REVIEW"
+    PRINTED = "PRINTED"
+    ANSWERS_ENTERED = "ANSWERS_ENTERED"
+    MARKED = "MARKED"
+    REVIEW_MARKS = "REVIEW_MARKS"
+    PUBLISHED = "PUBLISHED"
+    STUDY_PACK = "STUDY_PACK"
+    COMPLETE = "COMPLETE"
+
+
+# state -> (round, phase); total over all CycleState members (design §4 backfill
+# table).  GENERATING_B is lossy by design (no production data — design §4 note).
+_STATE_TO_ROUND_PHASE: dict[CycleState, tuple[int, CyclePhase]] = {
+    CycleState.SCOPE_UPLOADED: (1, CyclePhase.SCOPE_UPLOADED),
+    CycleState.GENERATING_A: (1, CyclePhase.GENERATING),
+    CycleState.PARENT_REVIEWS_DRAFT: (1, CyclePhase.DRAFT_REVIEW),
+    CycleState.APPROVED_PRINTED: (1, CyclePhase.PRINTED),
+    CycleState.ANSWERS_ENTERED: (1, CyclePhase.ANSWERS_ENTERED),
+    CycleState.AUTO_MARKED: (1, CyclePhase.MARKED),
+    CycleState.PARENT_REVIEW_MARKS: (1, CyclePhase.REVIEW_MARKS),
+    CycleState.GAP_REPORT: (1, CyclePhase.PUBLISHED),
+    CycleState.GENERATING_STUDY_PACK: (1, CyclePhase.STUDY_PACK),
+    CycleState.STUDY_PACK_DONE: (1, CyclePhase.STUDY_PACK),
+    CycleState.GENERATING_B: (2, CyclePhase.GENERATING),
+    CycleState.CYCLE_COMPLETE: (2, CyclePhase.COMPLETE),
+}
+
+# (round, phase) -> state — NOT 1:1 (design §6.4): STUDY_PACK collapses two old
+# states (GENERATING_STUDY_PACK / STUDY_PACK_DONE).  Canonical choice for the
+# reverse map: STUDY_PACK_DONE (the "settled" state — safe default for any
+# reader still keying off the shadowed `state` column).  Only round 1 and 2
+# are populated (P1 has no round >= 3 concept yet); round 1 phases map back to
+# their round-1 states, round 2 phases to their round-2 (GENERATING_B/
+# CYCLE_COMPLETE) states — this mirrors the only two rounds the backfill can
+# produce (design §4 backfill table endpoints: (1, SCOPE_UPLOADED) and
+# (2, COMPLETE) confirmed correct below).
+_ROUND_PHASE_TO_STATE: dict[tuple[int, CyclePhase], CycleState] = {
+    (1, CyclePhase.SCOPE_UPLOADED): CycleState.SCOPE_UPLOADED,
+    (1, CyclePhase.GENERATING): CycleState.GENERATING_A,
+    (1, CyclePhase.DRAFT_REVIEW): CycleState.PARENT_REVIEWS_DRAFT,
+    (1, CyclePhase.PRINTED): CycleState.APPROVED_PRINTED,
+    (1, CyclePhase.ANSWERS_ENTERED): CycleState.ANSWERS_ENTERED,
+    (1, CyclePhase.MARKED): CycleState.AUTO_MARKED,
+    (1, CyclePhase.REVIEW_MARKS): CycleState.PARENT_REVIEW_MARKS,
+    (1, CyclePhase.PUBLISHED): CycleState.GAP_REPORT,
+    (1, CyclePhase.STUDY_PACK): CycleState.STUDY_PACK_DONE,
+    (2, CyclePhase.GENERATING): CycleState.GENERATING_B,
+    (2, CyclePhase.COMPLETE): CycleState.CYCLE_COMPLETE,
+}
+
+
+def state_to_round_phase(state: CycleState) -> tuple[int, CyclePhase]:
+    """Map a (legacy) flat ``CycleState`` to its ``(round, phase)`` pair.
+
+    Total over all 12 ``CycleState`` members (design §4 backfill table).
+    """
+    return _STATE_TO_ROUND_PHASE[state]
+
+
+def round_phase_to_state(round: int, phase: CyclePhase) -> CycleState:  # noqa: A002
+    """Map ``(round, phase)`` back to the (legacy, shadowed) ``CycleState``.
+
+    NOT 1:1 with ``state_to_round_phase`` — ``(1, STUDY_PACK)`` collapses two
+    old states; the canonical choice is ``STUDY_PACK_DONE`` (design §6.4).
+    Raises ``KeyError`` for any ``(round, phase)`` pair with no P1 backfill
+    origin (e.g. round >= 3 — not yet representable by the legacy enum).
+    """
+    return _ROUND_PHASE_TO_STATE[(round, phase)]
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +270,25 @@ class CycleResponse(BaseModel):
     family_id: uuid.UUID
     subject_id: uuid.UUID
     state: CycleState
+    # Generic (round, phase) axis (docs/design/round-phase-architecture.md).
+    # `state` remains the DRIVER of logic through P1-P4; round/phase are
+    # derived from it (see the ``_fill_round_phase`` validator below) so
+    # they can never disagree with `state`. Repos do not need to compute
+    # these themselves — passing just `state` is enough; round/phase are
+    # filled in automatically before validation if omitted.
+    # Field defaults below are never actually relied on at runtime — the
+    # ``_fill_round_phase`` before-validator always derives real values from
+    # `state` (a required field) when the caller omits round/phase. They
+    # exist only so callers are not forced to pass round/phase explicitly
+    # (matching how repos construct CycleResponse today).
+    round: int = Field(
+        default=1,
+        description="Generic round axis (1 = diagnostic, 2 = retest, ...). Derived from state.",
+    )
+    phase: CyclePhase = Field(
+        default=CyclePhase.SCOPE_UPLOADED,
+        description="Generic phase axis, uniform across rounds. Derived from state.",
+    )
     scope_text: str | None = None
     parent_approval_at: datetime | None = None
     parent_approval_note: str | None = None
@@ -201,3 +305,28 @@ class CycleResponse(BaseModel):
             "populated on detail endpoint, empty on list views."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_round_phase(cls, data: object) -> object:
+        """Fill round/phase from state when not explicitly supplied.
+
+        state and (round, phase) must never disagree (design §5). If a
+        caller supplies round/phase explicitly, they are trusted as-is
+        (repos may do this to avoid recomputing); otherwise they are
+        derived here from ``state`` so every construction path — including
+        ``model_copy(update=...)`` which re-validates — stays consistent.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("round") is not None and data.get("phase") is not None:
+            return data
+        state_raw = data.get("state")
+        if state_raw is None:
+            return data
+        state = state_raw if isinstance(state_raw, CycleState) else CycleState(state_raw)
+        derived_round, derived_phase = state_to_round_phase(state)
+        filled = dict(data)
+        filled.setdefault("round", derived_round)
+        filled.setdefault("phase", derived_phase)
+        return filled

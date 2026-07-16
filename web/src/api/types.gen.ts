@@ -812,6 +812,11 @@ export type CycleCreate = {
 };
 
 /**
+ * CyclePhase
+ */
+export type CyclePhase = 'SCOPE_UPLOADED' | 'GENERATING' | 'DRAFT_REVIEW' | 'PRINTED' | 'ANSWERS_ENTERED' | 'MARKED' | 'REVIEW_MARKS' | 'PUBLISHED' | 'STUDY_PACK' | 'COMPLETE';
+
+/**
  * CycleResponse
  */
 export type CycleResponse = {
@@ -828,6 +833,16 @@ export type CycleResponse = {
      */
     subject_id: string;
     state: CycleState;
+    /**
+     * Round
+     *
+     * Generic round axis (1 = diagnostic, 2 = retest, ...). Derived from state.
+     */
+    round?: number;
+    /**
+     * Generic phase axis, uniform across rounds. Derived from state.
+     */
+    phase?: CyclePhase;
     /**
      * Scope Text
      */
@@ -2351,6 +2366,16 @@ export type CycleResponseWritable = {
      */
     subject_id: string;
     state: CycleState;
+    /**
+     * Round
+     *
+     * Generic round axis (1 = diagnostic, 2 = retest, ...). Derived from state.
+     */
+    round?: number;
+    /**
+     * Generic phase axis, uniform across rounds. Derived from state.
+     */
+    phase?: CyclePhase;
     /**
      * Scope Text
      */

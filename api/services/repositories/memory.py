@@ -18,6 +18,7 @@ from schemas.family import (
     FamilyResponse,
     SubjectResponse,
     VisibilityDefaults,
+    state_to_round_phase,
 )
 from schemas.gap_report import GapReport, GapReportRow
 from schemas.grading import QuestionMark
@@ -213,9 +214,12 @@ class InMemoryFamilyRepository:
         cycle = self._cycles.get(cycle_id)
         if cycle is None:
             raise ValueError(f"Cycle {cycle_id} not found")
+        new_round, new_phase = state_to_round_phase(new_state)
         updated = cycle.model_copy(
             update={
                 "state": new_state,
+                "round": new_round,
+                "phase": new_phase,
                 "updated_at": _now(),
                 "parent_approval_at": parent_approval_at or cycle.parent_approval_at,
                 "parent_approval_note": parent_approval_note or cycle.parent_approval_note,
@@ -235,9 +239,12 @@ class InMemoryFamilyRepository:
         cycle = self._cycles.get(cycle_id)
         if cycle is None:
             raise ValueError(f"Cycle {cycle_id} not found")
+        new_round, new_phase = state_to_round_phase(new_state)
         updated = cycle.model_copy(
             update={
                 "state": new_state,
+                "round": new_round,
+                "phase": new_phase,
                 "updated_at": _now(),
                 "marks_published_at": marks_published_at,
                 "published_visibility": published_visibility,

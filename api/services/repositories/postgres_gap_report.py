@@ -40,9 +40,15 @@ class PostgresGapReportRepository:
     ) -> GapReportRow:
         """Insert or overwrite the gap report for a cycle.
 
-        Uses ON CONFLICT (cycle_id) DO UPDATE so re-generation is idempotent.
-        The row id is preserved on re-runs (via EXCLUDED is ignored in favour of
+        Uses ON CONFLICT (cycle_id, round) DO UPDATE so re-generation is
+        idempotent (design docs/design/round-phase-architecture.md §4.3). The
+        row id is preserved on re-runs (via EXCLUDED is ignored in favour of
         the existing primary key on conflict, but created_at is refreshed).
+
+        P1: no caller threads a round through this Protocol method yet — the
+        only existing call sites are the round-1 (Variant A) path, so round
+        is hardcoded to 1 here (design §7 P1 scope; round-aware callers land
+        in P4).
         """
         report_json = report.model_dump_json()
 
@@ -50,11 +56,11 @@ class PostgresGapReportRepository:
         cur.execute(
             """
             INSERT INTO gap_reports (
-                family_id, cycle_id, submission_id, report
+                family_id, cycle_id, submission_id, report, round
             ) VALUES (
-                %(family_id)s, %(cycle_id)s, %(submission_id)s, %(report)s::jsonb
+                %(family_id)s, %(cycle_id)s, %(submission_id)s, %(report)s::jsonb, 1
             )
-            ON CONFLICT (cycle_id) DO UPDATE SET
+            ON CONFLICT (cycle_id, round) DO UPDATE SET
                 submission_id = EXCLUDED.submission_id,
                 report        = EXCLUDED.report,
                 created_at    = now()
@@ -73,13 +79,18 @@ class PostgresGapReportRepository:
         return _row_to_gap_report_row(row)
 
     def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
-        """Return the gap report row for a cycle, or None if not yet generated."""
+        """Return the round-1 gap report row for a cycle, or None if not yet generated.
+
+        P1: this Protocol method is not yet round-parameterized (design §7 P1
+        scope — round-aware callers land in P4), so it is pinned to round=1,
+        matching the only round upsert() currently writes.
+        """
         cur = self._conn.cursor()
         cur.execute(
             """
             SELECT id, family_id, cycle_id, submission_id, report, created_at
             FROM gap_reports
-            WHERE cycle_id = %s
+            WHERE cycle_id = %s AND round = 1
             """,
             (str(cycle_id),),
         )

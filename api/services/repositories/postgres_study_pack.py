@@ -40,8 +40,14 @@ class PostgresStudyPackRepository:
     ) -> StudyPackRow:
         """Insert or overwrite the study pack for a cycle.
 
-        Uses ON CONFLICT (cycle_id) DO UPDATE so re-generation is idempotent.
+        Uses ON CONFLICT (cycle_id, round) DO UPDATE so re-generation is
+        idempotent (design docs/design/round-phase-architecture.md §4.4).
         ``approved_at`` is NOT overwritten on conflict — approval survives regeneration.
+
+        P1: no caller threads a round through this Protocol method yet — the
+        only existing call sites are the round-1 (Variant A) path, so round
+        is hardcoded to 1 here (design §7 P1 scope; round-aware callers land
+        in P4).
         """
         pack_json = pack.model_dump_json()
 
@@ -49,11 +55,11 @@ class PostgresStudyPackRepository:
         cur.execute(
             """
             INSERT INTO study_packs (
-                family_id, cycle_id, pack
+                family_id, cycle_id, pack, round
             ) VALUES (
-                %(family_id)s, %(cycle_id)s, %(pack)s::jsonb
+                %(family_id)s, %(cycle_id)s, %(pack)s::jsonb, 1
             )
-            ON CONFLICT (cycle_id) DO UPDATE SET
+            ON CONFLICT (cycle_id, round) DO UPDATE SET
                 pack       = EXCLUDED.pack,
                 created_at = now()
             RETURNING id, family_id, cycle_id, pack, approved_at, created_at
@@ -70,13 +76,18 @@ class PostgresStudyPackRepository:
         return _row_to_study_pack_row(row)
 
     def get_for_cycle(self, cycle_id: uuid.UUID) -> StudyPackRow | None:
-        """Return the study pack row for a cycle, or None if not yet generated."""
+        """Return the round-1 study pack row for a cycle, or None if not yet generated.
+
+        P1: this Protocol method is not yet round-parameterized (design §7 P1
+        scope — round-aware callers land in P4), so it is pinned to round=1,
+        matching the only round upsert() currently writes.
+        """
         cur = self._conn.cursor()
         cur.execute(
             """
             SELECT id, family_id, cycle_id, pack, approved_at, created_at
             FROM study_packs
-            WHERE cycle_id = %s
+            WHERE cycle_id = %s AND round = 1
             """,
             (str(cycle_id),),
         )
@@ -90,13 +101,13 @@ class PostgresStudyPackRepository:
         cycle_id: uuid.UUID,
         approved_at: datetime,
     ) -> StudyPackRow:
-        """Record parent approval: set approved_at on the study pack row."""
+        """Record parent approval: set approved_at on the study pack row (round 1, P1 scope)."""
         cur = self._conn.cursor()
         cur.execute(
             """
             UPDATE study_packs
             SET approved_at = %(approved_at)s
-            WHERE cycle_id = %(cycle_id)s
+            WHERE cycle_id = %(cycle_id)s AND round = 1
             RETURNING id, family_id, cycle_id, pack, approved_at, created_at
             """,
             {
