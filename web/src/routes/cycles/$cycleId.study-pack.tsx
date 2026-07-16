@@ -9,7 +9,16 @@ import { Chip } from "../../components/Chip";
 import { supabase } from "../../lib/supabase";
 import styles from "./-study-pack.module.css";
 
+/**
+ * `?variant=b` drives this exact same study-pack UI against round 2's
+ * (retest) pack — the identical generate/approve/pdf-per-round endpoints
+ * round 1 uses (design §5/§7 P4/P5). Defaults to "a" so round 1's URL is
+ * unchanged.
+ */
 export const Route = createFileRoute("/cycles/$cycleId/study-pack")({
+  validateSearch: (search: Record<string, unknown>): { variant?: "a" | "b" } => ({
+    variant: search.variant === "b" ? "b" : undefined,
+  }),
   component: StudyPackPage,
 });
 
@@ -20,13 +29,13 @@ export const Route = createFileRoute("/cycles/$cycleId/study-pack")({
 // fetch using the same auth credentials (Bearer + X-User-Id) and trigger a
 // browser download from the resulting blob.
 
-async function downloadStudyPackPdf(cycleId: string): Promise<void> {
+async function downloadStudyPackPdf(cycleId: string, apiVariant: "A" | "B"): Promise<void> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   const userId = sessionData.session?.user?.id;
 
   const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
-  const url = `${baseUrl}/cycles/${cycleId}/study-pack/pdf`;
+  const url = `${baseUrl}/cycles/${cycleId}/study-pack/pdf?variant=${apiVariant}`;
 
   const headers: Record<string, string> = {
     Accept: "application/pdf",
@@ -58,6 +67,9 @@ async function downloadStudyPackPdf(cycleId: string): Promise<void> {
 
 function StudyPackPage() {
   const { cycleId } = Route.useParams();
+  const { variant: searchVariant } = Route.useSearch();
+  const variant: "a" | "b" = searchVariant ?? "a";
+  const apiVariant: "A" | "B" = variant === "b" ? "B" : "A";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -71,16 +83,22 @@ function StudyPackPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["study-pack", cycleId],
+    queryKey: ["study-pack", cycleId, variant],
     queryFn: async () => {
-      const res = await getStudyPack({ path: { cycle_id: cycleId } });
+      const res = await getStudyPack({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+      });
 
       // 404 → pack not yet generated; fire generate exactly once (idempotent).
       // The HTTP status lives on res.response, not on the error body (which is
       // FastAPI's { detail } shape).
       if (res.error) {
         if (res.response?.status === 404) {
-          const generated = await generateStudyPack({ path: { cycle_id: cycleId } });
+          const generated = await generateStudyPack({
+            path: { cycle_id: cycleId },
+            query: { variant: apiVariant },
+          });
           if (generated.error) throw generated.error;
           if (!generated.data) throw new Error("Study pack generation failed");
           return generated.data;
@@ -100,13 +118,16 @@ function StudyPackPage() {
   const approveMutation = useMutation({
     mutationFn: async () => {
       setApproveError(null);
-      const res = await approveStudyPack({ path: { cycle_id: cycleId } });
+      const res = await approveStudyPack({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+      });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("Approval failed");
       return res.data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["study-pack", cycleId] });
+      void qc.invalidateQueries({ queryKey: ["study-pack", cycleId, variant] });
       void qc.invalidateQueries({ queryKey: ["cycle", cycleId] });
       void qc.invalidateQueries({ queryKey: ["cycles"] });
     },
@@ -120,7 +141,7 @@ function StudyPackPage() {
     setPdfError(null);
     setPdfPending(true);
     try {
-      await downloadStudyPackPdf(cycleId);
+      await downloadStudyPackPdf(cycleId, apiVariant);
     } catch (err) {
       setPdfError(err instanceof Error ? err.message : "PDF download failed");
     } finally {

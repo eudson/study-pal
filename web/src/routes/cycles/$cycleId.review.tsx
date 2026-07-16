@@ -13,6 +13,7 @@ import type {
 } from "../../api/types.gen";
 import { StickerButton } from "../../components/StickerButton";
 import { Chip } from "../../components/Chip";
+import { roundConfig, searchVariantToRound } from "../../lib/round";
 import styles from "./-review.module.css";
 
 /**
@@ -308,8 +309,9 @@ function ReviewPage() {
   const { cycleId } = Route.useParams();
   const { variant: searchVariant } = Route.useSearch();
   const variant: "a" | "b" = searchVariant ?? "a";
-  const isVariantB = variant === "b";
-  const apiVariant: "A" | "B" = isVariantB ? "B" : "A";
+  const apiVariant: "A" | "B" = variant === "b" ? "B" : "A";
+  const round = searchVariantToRound(searchVariant);
+  const config = roundConfig(round);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -377,20 +379,14 @@ function ReviewPage() {
       return;
     }
     setUnresolvedIds(null);
-    // Variant A goes through the publish/visibility gate; Variant B has
-    // already been published once (Variant A) — its marks feed straight
-    // into the A-vs-B comparison, no separate visibility gate.
-    if (isVariantB) {
-      void navigate({
-        to: "/cycles/$cycleId/comparison",
-        params: { cycleId },
-      });
-    } else {
-      void navigate({
-        to: "/cycles/$cycleId/publish",
-        params: { cycleId },
-      });
-    }
+    // Every round goes through the same publish/visibility gate (design §3/
+    // §5/§7 P4/P5) — round 2's marks are published exactly like round 1's,
+    // then the parent moves on to the comparison from the PUBLISHED hub.
+    void navigate({
+      to: "/cycles/$cycleId/publish",
+      params: { cycleId },
+      ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
+    });
   };
 
   if (marksLoading) {
@@ -426,7 +422,7 @@ function ReviewPage() {
           </button>
           <div>
             <div className={styles.pageTitle}>
-              {isVariantB ? "Review retest marks" : "Review marks"}
+              {config.hasComparison ? `Review ${config.label.toLowerCase()} marks` : "Review marks"}
             </div>
             {/* Colour + label both carry meaning (DESIGN §2 — never colour-only). */}
             <div className={styles.summaryLine}>
@@ -460,8 +456,8 @@ function ReviewPage() {
       {unresolvedIds && unresolvedIds.length > 0 && (
         <div className={styles.warningBox} role="alert">
           {unresolvedIds.length === 1
-            ? `1 question still needs a mark before you can ${isVariantB ? "view the comparison" : "publish"}.`
-            : `${unresolvedIds.length} questions still need marks before you can ${isVariantB ? "view the comparison" : "publish"}.`}
+            ? "1 question still needs a mark before you can publish."
+            : `${unresolvedIds.length} questions still need marks before you can publish.`}
         </div>
       )}
 
@@ -470,7 +466,7 @@ function ReviewPage() {
         className={styles.ctaFull}
         onClick={handleContinue}
       >
-        {isVariantB ? "Continue to comparison" : "Continue to publish"}
+        Continue to publish
       </StickerButton>
     </div>
   );

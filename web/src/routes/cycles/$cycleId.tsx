@@ -7,12 +7,11 @@ import {
   generateAssessmentForCycle,
   approveCycleDraft,
   generateVariantB,
-  listQuestionMarks,
 } from "../../api/sdk.gen";
-import type { Assessment, Section, Question, CycleResponse } from "../../api/types.gen";
+import type { Assessment, Section, Question, CycleResponse, CyclePhase } from "../../api/types.gen";
 import { StickerButton } from "../../components/StickerButton";
 import { Chip } from "../../components/Chip";
-import { allResolved } from "./$cycleId.review";
+import { roundConfig, roundToSearchVariant } from "../../lib/round";
 import styles from "./-cycle.module.css";
 
 export const Route = createFileRoute("/cycles/$cycleId")({
@@ -117,11 +116,25 @@ function CycleDetailPage() {
     );
   }
 
-  // Extract assessment from cycle (now fully typed via the generated client).
-  const assessment = cycle.assessments?.[0] ?? null;
+  // Round + phase — the generic axes every round dispatches on (design
+  // §2/§7 P5). `round` defaults to 1 (round 1's own responses may omit it
+  // pre-hydration); `phase` is the single source of truth for which page
+  // renders — NOT `cycle.state` (the old variant-baked enum, kept only as
+  // a computed compat field on the wire until P6).
+  const round = cycle.round ?? 1;
+  const phase: CyclePhase | undefined = cycle.phase;
+  const variant = roundToSearchVariant(round);
 
-  // If still generating or no assessment yet
-  if (!assessment || cycle.state === "GENERATING_A") {
+  // Extract THIS round's assessment (round 1 -> variant A, round 2 -> B).
+  // Falls back to the first assessment present so a not-yet-hydrated
+  // `variant` mismatch never blanks the page.
+  const assessment =
+    cycle.assessments?.find((a) => a.variant === variant.toUpperCase()) ??
+    cycle.assessments?.[0] ??
+    null;
+
+  // No assessment yet, or still generating this round's paper.
+  if (!assessment || phase === "GENERATING" || phase === undefined) {
     return (
       <div className={styles.generatingShell}>
         <div className={styles.generatingContent}>
@@ -133,40 +146,41 @@ function CycleDetailPage() {
     );
   }
 
-  // APPROVED_PRINTED / ANSWERS_ENTERED → hand device to child
-  if (cycle.state === "APPROVED_PRINTED" || cycle.state === "ANSWERS_ENTERED") {
+  // PRINTED / ANSWERS_ENTERED → hand device to child (or show submitted state)
+  if (phase === "PRINTED" || phase === "ANSWERS_ENTERED") {
     return (
       <ApprovedPrintedPage
         cycle={cycle}
         cycleId={cycleId}
+        variant={variant}
       />
     );
   }
 
-  // AUTO_MARKED / PARENT_REVIEW_MARKS → parent reviews and sets final marks
-  if (cycle.state === "AUTO_MARKED" || cycle.state === "PARENT_REVIEW_MARKS") {
-    return <AutoMarkedPage cycle={cycle} cycleId={cycleId} />;
+  // MARKED / REVIEW_MARKS → parent reviews and sets final marks
+  if (phase === "MARKED" || phase === "REVIEW_MARKS") {
+    return <AutoMarkedPage cycle={cycle} cycleId={cycleId} variant={variant} />;
   }
 
-  // GAP_REPORT → marks published, show confirmation
-  if (cycle.state === "GAP_REPORT") {
-    return <PublishedPage cycleId={cycleId} />;
+  // PUBLISHED → marks published, show confirmation / next-step hub
+  if (phase === "PUBLISHED") {
+    return <PublishedPage cycleId={cycleId} round={round} variant={variant} />;
   }
 
-  // GENERATING_STUDY_PACK / STUDY_PACK_DONE → study pack is available or being built
-  if (cycle.state === "GENERATING_STUDY_PACK" || cycle.state === "STUDY_PACK_DONE") {
-    return <StudyPackReadyPage cycleId={cycleId} isGenerating={cycle.state === "GENERATING_STUDY_PACK"} />;
+  // STUDY_PACK → study pack is available or being built (this round's)
+  if (phase === "STUDY_PACK") {
+    return (
+      <StudyPackReadyPage
+        cycleId={cycleId}
+        round={round}
+        variant={variant}
+        isGenerating={cycle.state === "GENERATING_STUDY_PACK"}
+      />
+    );
   }
 
-  // GENERATING_B → Variant B retest in progress (child capture → grade →
-  // parent mark review → A-vs-B comparison). Cycle stays in this state
-  // throughout; the sub-flow is driven by explicit parent navigation.
-  if (cycle.state === "GENERATING_B") {
-    return <VariantBPage cycleId={cycleId} />;
-  }
-
-  // CYCLE_COMPLETE → terminal state, comparison is available read-only.
-  if (cycle.state === "CYCLE_COMPLETE") {
+  // COMPLETE → terminal phase, comparison is available read-only.
+  if (phase === "COMPLETE") {
     return <CyclesCompletePage cycleId={cycleId} />;
   }
 
@@ -184,7 +198,7 @@ function CycleDetailPage() {
 
   return (
     <DraftPreviewPage
-      cycle={cycle}
+      round={round}
       assessment={assessment}
       onScreenView={() => setScreenView(true)}
       onApprove={() => approveMutation.mutate()}
@@ -204,11 +218,14 @@ function CycleDetailPage() {
 interface ApprovedPrintedPageProps {
   cycle: CycleResponse;
   cycleId: string;
+  /** Round-derived, lowercase URL variant ("a" | "b") threaded into the
+   * capture route so it targets this round's assessment. */
+  variant: "a" | "b";
 }
 
-function ApprovedPrintedPage({ cycle, cycleId }: ApprovedPrintedPageProps) {
+function ApprovedPrintedPage({ cycle, cycleId, variant }: ApprovedPrintedPageProps) {
   const navigate = useNavigate();
-  const isAnswered = cycle.state === "ANSWERS_ENTERED";
+  const isAnswered = cycle.phase === "ANSWERS_ENTERED";
 
   return (
     <div className={styles.shell}>
@@ -247,6 +264,9 @@ function ApprovedPrintedPage({ cycle, cycleId }: ApprovedPrintedPageProps) {
               void navigate({
                 to: "/capture/$cycleId",
                 params: { cycleId },
+                // Round 1 keeps today's clean URL (no query string); round 2+
+                // threads `?variant=b` so capture targets this round.
+                ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
               })
             }
           >
@@ -263,7 +283,7 @@ function ApprovedPrintedPage({ cycle, cycleId }: ApprovedPrintedPageProps) {
 // ────────────────────────────────────────────────────────
 
 interface DraftPreviewPageProps {
-  cycle: CycleResponse;
+  round: number;
   assessment: Assessment;
   onScreenView: () => void;
   onApprove: () => void;
@@ -275,6 +295,7 @@ interface DraftPreviewPageProps {
 }
 
 function DraftPreviewPage({
+  round,
   assessment,
   onScreenView,
   onApprove,
@@ -286,6 +307,12 @@ function DraftPreviewPage({
 }: DraftPreviewPageProps) {
   const navigate = useNavigate();
   const totalQuestions = assessment.sections.reduce((acc, s) => acc + s.questions.length, 0);
+  const isRetest = round >= 2;
+  // Regenerating from scope text is round 1's own generation input strategy
+  // only (design §3) — round 2 generates from the round-1 assessment + gap
+  // report instead, via the separate `generateVariantB` retest flow, so
+  // there is no equivalent "regenerate this draft" action for round 2+.
+  const canRegenerate = !isRetest;
 
   return (
     <div className={styles.shell}>
@@ -299,13 +326,15 @@ function DraftPreviewPage({
           >
             ‹
           </button>
-          <div className={styles.pageTitle}>Draft ready</div>
+          <div className={styles.pageTitle}>{isRetest ? "Retest draft ready" : "Draft ready"}</div>
         </div>
         <Chip variant="teal">{totalQuestions} questions</Chip>
       </div>
 
       <p className={styles.draftSubtext}>
-        Nothing prints until you approve. Papers stay formal, school-style.
+        {isRetest
+          ? "Built from the gap report — same coverage, fresh questions. Nothing prints until you approve."
+          : "Nothing prints until you approve. Papers stay formal, school-style."}
       </p>
 
       <div className={styles.paperCard}>
@@ -334,14 +363,16 @@ function DraftPreviewPage({
         >
           {isApproving ? "Approving…" : "Approve & print"}
         </StickerButton>
-        <button
-          type="button"
-          className={styles.secondaryBtn}
-          disabled={isRegenerating || isApproving}
-          onClick={onRegenerate}
-        >
-          {isRegenerating ? "Regenerating…" : "Regenerate"}
-        </button>
+        {canRegenerate && (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={isRegenerating || isApproving}
+            onClick={onRegenerate}
+          >
+            {isRegenerating ? "Regenerating…" : "Regenerate"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -533,13 +564,21 @@ export { SectionBlock };
 
 interface StudyPackReadyPageProps {
   cycleId: string;
+  round: number;
+  variant: "a" | "b";
   isGenerating: boolean;
 }
 
-function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) {
+function StudyPackReadyPage({ cycleId, round, variant, isGenerating }: StudyPackReadyPageProps) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [variantBError, setVariantBError] = useState<string | null>(null);
+  const config = roundConfig(round);
+  // Starting the next round is only offered from round 1's study pack today
+  // — `generateVariantB`/`start_next_round` only ever takes round 1 -> round
+  // 2 (there is no round 3 in this MVP). A round 2 study pack has no further
+  // "start next round" action.
+  const canStartNextRound = round === 1;
 
   const startVariantBMutation = useMutation({
     mutationFn: async () => {
@@ -571,7 +610,11 @@ function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) 
             ‹
           </button>
           <div className={styles.pageTitle}>
-            {isGenerating ? "Building study pack" : "Study pack ready"}
+            {isGenerating
+              ? "Building study pack"
+              : config.hasComparison
+                ? "Retest study pack ready"
+                : "Study pack ready"}
           </div>
         </div>
         {/* gold = in progress; teal = done (DESIGN §2 semantic roles). */}
@@ -583,7 +626,9 @@ function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) 
       <p className={styles.draftSubtext}>
         {isGenerating
           ? "The study pack is being built from the gap report. This usually takes a moment."
-          : "The study pack is ready. Review practice items and approve before your child sees it."}
+          : config.hasComparison
+            ? "Built from the retest's growing areas. Review practice items and approve before your child sees it."
+            : "The study pack is ready. Review practice items and approve before your child sees it."}
       </p>
 
       <div className={styles.actionStack}>
@@ -593,15 +638,16 @@ function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) 
             void navigate({
               to: "/cycles/$cycleId/study-pack",
               params: { cycleId },
+              ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
             })
           }
         >
           {isGenerating ? "View study pack" : "View study pack"}
         </StickerButton>
 
-        {/* Retest — only offered once the study pack is ready, not while
-            still generating. Starts Variant B (Week 6 loop tail). */}
-        {!isGenerating && (
+        {/* Retest — only offered once round 1's study pack is ready, not
+            while still generating (Week 6 loop tail). */}
+        {!isGenerating && canStartNextRound && (
           <>
             {variantBError && (
               <div className={styles.errorBox} role="alert">
@@ -630,11 +676,12 @@ function StudyPackReadyPage({ cycleId, isGenerating }: StudyPackReadyPageProps) 
 interface AutoMarkedPageProps {
   cycle: CycleResponse;
   cycleId: string;
+  variant: "a" | "b";
 }
 
-function AutoMarkedPage({ cycle, cycleId }: AutoMarkedPageProps) {
+function AutoMarkedPage({ cycle, cycleId, variant }: AutoMarkedPageProps) {
   const navigate = useNavigate();
-  const isReviewing = cycle.state === "PARENT_REVIEW_MARKS";
+  const isReviewing = cycle.phase === "REVIEW_MARKS";
 
   return (
     <div className={styles.shell}>
@@ -672,6 +719,7 @@ function AutoMarkedPage({ cycle, cycleId }: AutoMarkedPageProps) {
             void navigate({
               to: "/cycles/$cycleId/review",
               params: { cycleId },
+              ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
             })
           }
         >
@@ -683,11 +731,19 @@ function AutoMarkedPage({ cycle, cycleId }: AutoMarkedPageProps) {
 }
 
 // ────────────────────────────────────────────────────────
-// Published (GAP_REPORT) — confirmation view
+// Published — confirmation view / next-step hub (every round)
 // ────────────────────────────────────────────────────────
 
-function PublishedPage({ cycleId }: { cycleId: string }) {
+interface PublishedPageProps {
+  cycleId: string;
+  round: number;
+  variant: "a" | "b";
+}
+
+function PublishedPage({ cycleId, round, variant }: PublishedPageProps) {
   const navigate = useNavigate();
+  const config = roundConfig(round);
+  const searchVariant = variant === "b" ? ({ search: { variant: "b" as const } }) : {};
 
   return (
     <div className={styles.shell}>
@@ -701,13 +757,17 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
           >
             ‹
           </button>
-          <div className={styles.pageTitle}>Results published</div>
+          <div className={styles.pageTitle}>
+            {config.hasComparison ? "Retest results published" : "Results published"}
+          </div>
         </div>
         <Chip variant="teal">Published</Chip>
       </div>
 
       <p className={styles.draftSubtext}>
-        The marks have been published to your child. The gap report will guide the study pack.
+        {config.resultsChildVisible
+          ? "The marks have been published to your child. The gap report will guide the study pack."
+          : "The marks are finalised. Review the gap report to see how this retest compares with the diagnostic."}
       </p>
 
       <div className={styles.actionStack}>
@@ -718,6 +778,7 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
             void navigate({
               to: "/cycles/$cycleId/gap-report",
               params: { cycleId },
+              ...searchVariant,
             })
           }
         >
@@ -731,6 +792,7 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
             void navigate({
               to: "/cycles/$cycleId/study-pack",
               params: { cycleId },
+              ...searchVariant,
             })
           }
         >
@@ -744,130 +806,44 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
             void navigate({
               to: "/cycles/$cycleId/review",
               params: { cycleId },
+              ...searchVariant,
             })
           }
         >
           View marks
         </button>
-        {/* Tertiary: hand the device to the child to see their results. */}
-        <button
-          type="button"
-          className={styles.secondaryBtn}
-          onClick={() =>
-            void navigate({
-              to: "/results/$cycleId",
-              params: { cycleId },
-            })
-          }
-        >
-          Show my child their results
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────
-// GENERATING_B — Variant B retest in progress. The cycle stays in this
-// state throughout capture → grade → parent review → comparison; the
-// sub-flow is driven by explicit parent navigation between the existing
-// (reused) capture/review routes with ?variant=b, and the new comparison
-// route, rather than by additional cycle states.
-// ────────────────────────────────────────────────────────
-
-function VariantBPage({ cycleId }: { cycleId: string }) {
-  const navigate = useNavigate();
-
-  // Variant B marks: fetched once so we know whether "Review retest marks"
-  // and "View comparison" are actionable yet. Before B has been captured +
-  // graded, the marks endpoint 404s/409s — that's an expected "not ready"
-  // state here, not an error to surface (unlike the review page itself).
-  const { data: marksB, isLoading: marksBLoading } = useQuery({
-    queryKey: ["marks", cycleId, "b"],
-    queryFn: async () => {
-      const res = await listQuestionMarks({
-        path: { cycle_id: cycleId },
-        query: { variant: "B" },
-      });
-      if (res.error) return null;
-      return res.data ?? null;
-    },
-    retry: false,
-  });
-
-  const marksBExist = !!marksB && marksB.items.length > 0;
-  const comparisonReady = !!marksB && allResolved(marksB.items);
-  const reviewDisabled = marksBLoading || !marksBExist;
-  const comparisonDisabled = marksBLoading || !comparisonReady;
-
-  return (
-    <div className={styles.shell}>
-      <div className={styles.draftHeader}>
-        <div className={styles.draftHeaderLeft}>
+        {/* Cross-round comparison — only meaningful once a retest (round 2+)
+            has published its own marks (design §3/§7). */}
+        {config.hasComparison && (
           <button
             type="button"
-            className={styles.backBtn}
-            aria-label="Back"
-            onClick={() => void navigate({ to: "/" })}
+            className={styles.secondaryBtn}
+            onClick={() =>
+              void navigate({
+                to: "/cycles/$cycleId/comparison",
+                params: { cycleId },
+              })
+            }
           >
-            ‹
+            View comparison
           </button>
-          <div className={styles.pageTitle}>Variant B retest</div>
-        </div>
-        {/* gold = in progress (DESIGN §2 semantic roles). */}
-        <Chip variant="gold">In progress</Chip>
-      </div>
-
-      <p className={styles.draftSubtext}>
-        Your child answers a fresh set of questions covering the same ground.
-        Once marks are reviewed, you&apos;ll see how the gaps from last time compare.
-      </p>
-
-      <div className={styles.actionStack}>
-        <StickerButton
-          className={styles.ctaFull}
-          onClick={() =>
-            void navigate({
-              to: "/capture/$cycleId",
-              params: { cycleId },
-              search: { variant: "b" },
-            })
-          }
-        >
-          Enter retest answers
-        </StickerButton>
-        <button
-          type="button"
-          className={styles.secondaryBtn}
-          disabled={reviewDisabled}
-          onClick={() =>
-            void navigate({
-              to: "/cycles/$cycleId/review",
-              params: { cycleId },
-              search: { variant: "b" },
-            })
-          }
-        >
-          Review retest marks
-        </button>
-        {reviewDisabled && (
-          <p className={styles.disabledHint}>Enter retest answers first</p>
         )}
-        <button
-          type="button"
-          className={styles.secondaryBtn}
-          disabled={comparisonDisabled}
-          onClick={() =>
-            void navigate({
-              to: "/cycles/$cycleId/comparison",
-              params: { cycleId },
-            })
-          }
-        >
-          View comparison
-        </button>
-        {comparisonDisabled && (
-          <p className={styles.disabledHint}>Finish marking the retest first</p>
+        {/* Tertiary: hand the device to the child to see their results —
+            only offered when this round's results are child-visible (design
+            §2 table: round 1 yes, round 2+ parent-only in v1). */}
+        {config.resultsChildVisible && (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={() =>
+              void navigate({
+                to: "/results/$cycleId",
+                params: { cycleId },
+              })
+            }
+          >
+            Show my child their results
+          </button>
         )}
       </div>
     </div>
@@ -875,7 +851,7 @@ function VariantBPage({ cycleId }: { cycleId: string }) {
 }
 
 // ────────────────────────────────────────────────────────
-// CYCLE_COMPLETE — terminal state, comparison available read-only.
+// COMPLETE — terminal phase, comparison available read-only.
 // ────────────────────────────────────────────────────────
 
 function CyclesCompletePage({ cycleId }: { cycleId: string }) {

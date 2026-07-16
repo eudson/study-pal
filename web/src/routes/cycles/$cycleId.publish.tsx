@@ -7,7 +7,15 @@ import type { VisibilityDefaults } from "../../api/types.gen";
 import { StickerButton } from "../../components/StickerButton";
 import styles from "./-publish.module.css";
 
+/**
+ * `?variant=b` publishes the SAME gate against round 2's (retest) marks —
+ * the identical REVIEW_MARKS -> PUBLISHED transition round 1 uses (design
+ * §5/§7 P4/P5). Defaults to "a" so round 1's URL/behaviour is unchanged.
+ */
 export const Route = createFileRoute("/cycles/$cycleId/publish")({
+  validateSearch: (search: Record<string, unknown>): { variant?: "a" | "b" } => ({
+    variant: search.variant === "b" ? "b" : undefined,
+  }),
   component: PublishPage,
 });
 
@@ -47,6 +55,9 @@ function VisibilityToggle({ label, checked, disabled = false, onChange }: Visibi
 
 function PublishPage() {
   const { cycleId } = Route.useParams();
+  const { variant: searchVariant } = Route.useSearch();
+  const variant: "a" | "b" = searchVariant ?? "a";
+  const apiVariant: "A" | "B" = variant === "b" ? "B" : "A";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -119,6 +130,7 @@ function PublishPage() {
       setPublishError(null);
       const res = await publishMarks({
         path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
         body: {
           accuracy,
           effort,
@@ -150,8 +162,8 @@ function PublishPage() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["cycle", cycleId] });
       void qc.invalidateQueries({ queryKey: ["cycles"] });
-      void qc.invalidateQueries({ queryKey: ["marks", cycleId] });
-      // Navigate home — the cycle card will show GAP_REPORT state
+      void qc.invalidateQueries({ queryKey: ["marks", cycleId, variant] });
+      // Navigate home — the cycle card will show the PUBLISHED phase
       void navigate({ to: "/" });
     },
     onError: (err: unknown) => {
@@ -171,6 +183,7 @@ function PublishPage() {
             void navigate({
               to: "/cycles/$cycleId/review",
               params: { cycleId },
+              ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
             })
           }
         >
@@ -237,6 +250,7 @@ function PublishPage() {
           void navigate({
             to: "/cycles/$cycleId/review",
             params: { cycleId },
+            ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
           })
         }
       >

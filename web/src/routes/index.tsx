@@ -61,6 +61,10 @@ function formatDate(iso: string): string {
 function CycleCard({ cycle, childName, subjectName }: { cycle: CycleResponse; childName: string; subjectName: string }) {
   const step = STATE_STEP[cycle.state];
   const steps = [0, 1, 2, 3];
+  // Round 2+ = retest (design/round.ts roundConfig). Neutral chip — this is
+  // an identity label, not a status, so it stays visually quiet next to the
+  // status chip (which already carries the teal/gold state meaning).
+  const isRetest = (cycle.round ?? 1) >= 2;
 
   return (
     <Link to="/cycles/$cycleId" params={{ cycleId: cycle.id }} className={styles.cycleCard}>
@@ -68,9 +72,12 @@ function CycleCard({ cycle, childName, subjectName }: { cycle: CycleResponse; ch
         <span className={styles.cycleCardTitle}>
           {subjectName}
         </span>
-        <Chip variant={stateChipVariant(cycle.state)}>
-          {STATE_LABELS[cycle.state]}
-        </Chip>
+        <div className={styles.cycleCardChips}>
+          {isRetest && <Chip variant="neutral">Retest</Chip>}
+          <Chip variant={stateChipVariant(cycle.state)}>
+            {STATE_LABELS[cycle.state]}
+          </Chip>
+        </div>
       </div>
       <div className={styles.cycleCardMeta}>
         {childName} · started {formatDate(cycle.created_at)}

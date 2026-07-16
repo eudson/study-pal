@@ -7,7 +7,15 @@ import { StickerButton } from "../../components/StickerButton";
 import { GapChip } from "../../components/GapChip";
 import styles from "./-gap-report.module.css";
 
+/**
+ * `?variant=b` drives this exact same gap-report UI against round 2's
+ * (retest) marks — the identical derive/upsert-per-round endpoint round 1
+ * uses (design §5/§7 P4/P5). Defaults to "a" so round 1's URL is unchanged.
+ */
 export const Route = createFileRoute("/cycles/$cycleId/gap-report")({
+  validateSearch: (search: Record<string, unknown>): { variant?: "a" | "b" } => ({
+    variant: search.variant === "b" ? "b" : undefined,
+  }),
   component: GapReportPage,
 });
 
@@ -77,6 +85,9 @@ function ItemRow({ item }: ItemRowProps) {
 
 function GapReportPage() {
   const { cycleId } = Route.useParams();
+  const { variant: searchVariant } = Route.useSearch();
+  const variant: "a" | "b" = searchVariant ?? "a";
+  const apiVariant: "A" | "B" = variant === "b" ? "B" : "A";
   const navigate = useNavigate();
 
   const {
@@ -84,9 +95,12 @@ function GapReportPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["gap-report", cycleId],
+    queryKey: ["gap-report", cycleId, variant],
     queryFn: async () => {
-      const res = await getGapReport({ path: { cycle_id: cycleId } });
+      const res = await getGapReport({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+      });
 
       // 404 → gap report not yet derived; trigger generation exactly once.
       // The HTTP status lives on res.response, not on the error body (which is
@@ -95,6 +109,7 @@ function GapReportPage() {
         if (res.response?.status === 404) {
           const generated = await generateGapReport({
             path: { cycle_id: cycleId },
+            query: { variant: apiVariant },
           });
           if (generated.error) throw generated.error;
           if (!generated.data) throw new Error("Generate gap report failed");
@@ -275,6 +290,7 @@ function GapReportPage() {
             void navigate({
               to: "/cycles/$cycleId/study-pack",
               params: { cycleId },
+              ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
             })
           }
         >

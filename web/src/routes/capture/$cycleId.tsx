@@ -177,8 +177,7 @@ function CapturePage() {
   const { cycleId } = Route.useParams();
   const { variant: searchVariant } = Route.useSearch();
   const variant: "a" | "b" = searchVariant ?? "a";
-  const isVariantB = variant === "b";
-  const apiVariant: "A" | "B" = isVariantB ? "B" : "A";
+  const apiVariant: "A" | "B" = variant === "b" ? "B" : "A";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -221,7 +220,10 @@ function CapturePage() {
       if (!res.data) throw new Error("Capture view not available");
       return res.data;
     },
-    enabled: !!cycle && (isVariantB ? cycle.state === "GENERATING_B" : cycle.state === "APPROVED_PRINTED"),
+    // Capture view is legal only at PRINTED — identical guard for every
+    // round (design §5/§7 P4/P5); `variant` only selects which round's
+    // assessment/marks are targeted, never a different guard.
+    enabled: !!cycle && cycle.phase === "PRINTED",
   });
 
   // Resolve child_id: subject whose id matches cycle.subject_id → subject.child_id
@@ -313,26 +315,22 @@ function CapturePage() {
       if (res.error) throw res.error;
       if (!res.data) throw new Error("Submission failed");
 
-      // Variant B has no automatic state-machine advance on submission —
-      // grading must be triggered explicitly (Variant A's AUTO_MARKED
-      // transition happens server-side on submission; B stays in
-      // GENERATING_B throughout, so we drive the grade step here).
-      if (isVariantB) {
-        const gradeRes = await gradeSubmissionMarks({
-          path: { cycle_id: cycleId },
-          query: { variant: apiVariant },
-        });
-        if (gradeRes.error) throw gradeRes.error;
-      }
+      // Submission alone only advances PRINTED -> ANSWERS_ENTERED; grading
+      // (ANSWERS_ENTERED -> MARKED) is a separate explicit step for every
+      // round (uniform, phase-driven — design §5/§7 P4/P5; no per-variant
+      // special-case here anymore).
+      const gradeRes = await gradeSubmissionMarks({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+      });
+      if (gradeRes.error) throw gradeRes.error;
 
       return res.data;
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["cycle", cycleId] });
       void qc.invalidateQueries({ queryKey: ["cycles"] });
-      if (isVariantB) {
-        void qc.invalidateQueries({ queryKey: ["marks", cycleId, "b"] });
-      }
+      void qc.invalidateQueries({ queryKey: ["marks", cycleId, variant] });
       setSubmitted(true);
     },
     onError: (err: unknown) => {
@@ -365,9 +363,7 @@ function CapturePage() {
     );
   }
 
-  const cycleReady = isVariantB
-    ? cycle?.state === "GENERATING_B"
-    : cycle?.state === "APPROVED_PRINTED" || cycle?.state === "ANSWERS_ENTERED";
+  const cycleReady = cycle?.phase === "PRINTED" || cycle?.phase === "ANSWERS_ENTERED";
 
   if (cycle && !cycleReady) {
     return (

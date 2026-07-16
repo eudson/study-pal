@@ -79,7 +79,7 @@ function ComparisonPage() {
       return res.data;
     },
   });
-  const isComplete = cycle?.state === "CYCLE_COMPLETE";
+  const isComplete = cycle?.phase === "COMPLETE";
 
   const {
     data: comparison,
