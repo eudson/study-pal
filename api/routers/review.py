@@ -1,9 +1,13 @@
 """Phase 3 — parent mark review + publish gate endpoints.
 
     PATCH /cycles/{cycle_id}/marks/{question_id}
-        Parent override of a single question mark.
+        Parent override of a single question mark, variant-parameterized
+        (``?variant=A|B``, default ``A``).
         Sets final_marks, reviewed_at, and overridden_at (when marks differ).
-        On first call: transitions AUTO_MARKED → PARENT_REVIEW_MARKS.
+        Variant A: on first call, transitions AUTO_MARKED → PARENT_REVIEW_MARKS.
+        Variant B: legal only in GENERATING_B; never advances cycle state.
+        Guarded by the target variant's published-immutability (409 if
+        already published — Variant A only in v1).
         operation_id: review_question_mark
 
     POST /cycles/{cycle_id}/publish
@@ -29,6 +33,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -48,13 +53,11 @@ from schemas.review import (
     UnresolvedMarksError,
 )
 from services.auth import get_identity
-from services.cycle import (
-    IllegalTransitionError,
-    advance_to_parent_review_marks,
-)
+from services.cycle import IllegalTransitionError
 from services.cycle import (
     publish_marks as cycle_publish_marks,
 )
+from services.phase import PHASE_CONFIG, apply_advance
 from services.repositories.base import (
     FamilyRepository,
     QuestionMarkRepository,
@@ -81,6 +84,7 @@ def review_question_mark(
     cycle_id: uuid.UUID,
     question_id: str,
     body: MarkPatchRequest,
+    variant: Literal["A", "B"] = "A",
     identity: Identity = Depends(get_identity),
     family_repo: FamilyRepository = Depends(get_family_repository),
     marks_repo: QuestionMarkRepository = Depends(get_question_mark_repository),
@@ -90,12 +94,15 @@ def review_question_mark(
 
     Guards:
     1. Cycle exists in the caller's family (RLS).
-    2. Cycle is in AUTO_MARKED or PARENT_REVIEW_MARKS.
-    3. The question mark exists for this cycle's submission.
-    4. final_marks (if provided) must be <= marks_total.
+    2. The target variant's marks are not already published (409).
+    3. Cycle is in the variant's legal review state (PHASE_CONFIG). For
+       Variant A this is AUTO_MARKED or PARENT_REVIEW_MARKS.
+    4. The question mark exists for this cycle's submission + variant.
+    5. final_marks (if provided) must be <= marks_total.
 
-    Transition: AUTO_MARKED → PARENT_REVIEW_MARKS on the first PATCH.
-    Already in PARENT_REVIEW_MARKS: no transition needed.
+    Transition (Variant A only): AUTO_MARKED → PARENT_REVIEW_MARKS on the
+    first PATCH. Already in PARENT_REVIEW_MARKS: no transition needed.
+    Variant B never advances cycle state.
     """
     _resolve_family_id(identity, family_repo)
 
@@ -106,21 +113,30 @@ def review_question_mark(
             detail="Cycle not found.",
         )
 
-    if cycle.state not in (CycleState.AUTO_MARKED, CycleState.PARENT_REVIEW_MARKS):
+    config = PHASE_CONFIG[variant]
+
+    if config.is_published(cycle):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Variant {variant} marks are published and immutable.",
+        )
+
+    if not config.review.is_legal(cycle.state):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 f"Cycle is in state '{cycle.state}'; "
-                "mark review requires AUTO_MARKED or PARENT_REVIEW_MARKS state."
+                f"Variant {variant} mark review requires the cycle to be "
+                f"{config.review.label()}."
             ),
         )
 
-    # Resolve submission_id for this cycle.
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
+    # Resolve submission_id for this cycle + variant.
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, variant)
     if submission_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No graded submission found for this cycle.",
+            detail=f"No graded Variant-{variant} submission found for this cycle.",
         )
 
     # Fetch the existing mark to validate final_marks upper bound.
@@ -128,7 +144,7 @@ def review_question_mark(
     if existing_mark is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Question mark '{question_id}' not found for this cycle.",
+            detail=f"Question mark '{question_id}' not found for this cycle's Variant {variant}.",
         )
 
     # Validate final_marks <= marks_total.
@@ -143,21 +159,20 @@ def review_question_mark(
 
     now = datetime.now(tz=UTC)
 
-    # Transition AUTO_MARKED → PARENT_REVIEW_MARKS on first review.
-    if cycle.state == CycleState.AUTO_MARKED:
-        try:
-            advance_to_parent_review_marks(family_repo, cycle_id)
-        except IllegalTransitionError as exc:
-            log.warning(
-                "review_question_mark: state advance to PARENT_REVIEW_MARKS failed "
-                "for cycle %s: %s",
-                cycle_id,
-                exc,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(exc),
-            ) from exc
+    # Transition (Variant A only, and only from AUTO_MARKED — table-driven).
+    try:
+        apply_advance(config.review, family_repo, cycle_id, cycle.state)
+    except IllegalTransitionError as exc:
+        log.warning(
+            "review_question_mark: state advance failed for cycle %s variant %s: %s",
+            cycle_id,
+            variant,
+            exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
     # Apply the patch.
     updated_mark = marks_repo.update_mark(submission_id, question_id, body, now)

@@ -19,9 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getCaptureView,
   createSubmission,
-  getVariantBCaptureView,
-  createVariantBSubmission,
-  gradeVariantB,
+  gradeSubmissionMarks,
   getCycle,
   listSubjects,
 } from "../../api/sdk.gen";
@@ -180,6 +178,7 @@ function CapturePage() {
   const { variant: searchVariant } = Route.useSearch();
   const variant: "a" | "b" = searchVariant ?? "a";
   const isVariantB = variant === "b";
+  const apiVariant: "A" | "B" = isVariantB ? "B" : "A";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -214,9 +213,10 @@ function CapturePage() {
   } = useQuery({
     queryKey: ["captureView", cycleId, variant],
     queryFn: async () => {
-      const res = isVariantB
-        ? await getVariantBCaptureView({ path: { cycle_id: cycleId } })
-        : await getCaptureView({ path: { cycle_id: cycleId } });
+      const res = await getCaptureView({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+      });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("Capture view not available");
       return res.data;
@@ -305,9 +305,11 @@ function CapturePage() {
         responses: responseList,
         proof_photo_paths: [], // Storage upload deferred — Phase 2
       };
-      const res = isVariantB
-        ? await createVariantBSubmission({ path: { cycle_id: cycleId }, body: submissionBody })
-        : await createSubmission({ path: { cycle_id: cycleId }, body: submissionBody });
+      const res = await createSubmission({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+        body: submissionBody,
+      });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("Submission failed");
 
@@ -316,7 +318,10 @@ function CapturePage() {
       // transition happens server-side on submission; B stays in
       // GENERATING_B throughout, so we drive the grade step here).
       if (isVariantB) {
-        const gradeRes = await gradeVariantB({ path: { cycle_id: cycleId } });
+        const gradeRes = await gradeSubmissionMarks({
+          path: { cycle_id: cycleId },
+          query: { variant: apiVariant },
+        });
         if (gradeRes.error) throw gradeRes.error;
       }
 

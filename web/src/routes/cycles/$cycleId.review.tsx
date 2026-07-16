@@ -5,8 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listQuestionMarks,
   reviewQuestionMark,
-  getVariantBMarks,
-  reviewVariantBMark,
 } from "../../api/sdk.gen";
 import type {
   QuestionMarkWithContext,
@@ -164,6 +162,7 @@ interface ReviewRowProps {
 function ReviewRow({ item, cycleId, variant, onMarkUpdated }: ReviewRowProps) {
   const { mark, question } = item;
   const isVariantB = variant === "b";
+  const apiVariant: "A" | "B" = isVariantB ? "B" : "A";
   const marksTotal = parseDecimal(question.marks_total);
   // Effective displayed mark: final_marks if set, else suggested_marks
   const effectiveMarks = parseDecimal(
@@ -177,9 +176,9 @@ function ReviewRow({ item, cycleId, variant, onMarkUpdated }: ReviewRowProps) {
 
   const mutation = useMutation({
     mutationFn: async (finalMarks: number) => {
-      const reviewFn = isVariantB ? reviewVariantBMark : reviewQuestionMark;
-      const res = await reviewFn({
+      const res = await reviewQuestionMark({
         path: { cycle_id: cycleId, question_id: question.qid },
+        query: { variant: apiVariant },
         body: { final_marks: finalMarks },
       });
       if (res.error) throw res.error;
@@ -193,9 +192,9 @@ function ReviewRow({ item, cycleId, variant, onMarkUpdated }: ReviewRowProps) {
 
   const markAsGrowing = useMutation({
     mutationFn: async () => {
-      const reviewFn = isVariantB ? reviewVariantBMark : reviewQuestionMark;
-      const res = await reviewFn({
+      const res = await reviewQuestionMark({
         path: { cycle_id: cycleId, question_id: question.qid },
+        query: { variant: apiVariant },
         body: { final_marks: 0, error_category: "concept_gap" },
       });
       if (res.error) throw res.error;
@@ -310,6 +309,7 @@ function ReviewPage() {
   const { variant: searchVariant } = Route.useSearch();
   const variant: "a" | "b" = searchVariant ?? "a";
   const isVariantB = variant === "b";
+  const apiVariant: "A" | "B" = isVariantB ? "B" : "A";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -324,9 +324,10 @@ function ReviewPage() {
   } = useQuery({
     queryKey: marksQueryKey,
     queryFn: async () => {
-      const res = isVariantB
-        ? await getVariantBMarks({ path: { cycle_id: cycleId } })
-        : await listQuestionMarks({ path: { cycle_id: cycleId } });
+      const res = await listQuestionMarks({
+        path: { cycle_id: cycleId },
+        query: { variant: apiVariant },
+      });
       if (res.error) throw res.error;
       if (!res.data) throw new Error("No marks data");
       return res.data;

@@ -7,8 +7,10 @@ Coverage:
 - A+B COEXISTENCE (advisor guardrail #3): list_for_cycle(cycle_id, variant)
   never bleeds A and B marks together; grading B leaves A's marks unchanged.
 - derive_ab_comparison: closed/persisting/new partitioning incl. half-marks.
-- variant_b router: authz/state guards (401/404/409) + full happy path
-  generate -> capture -> submit -> grade -> review -> comparison -> complete.
+- retest router (generate/comparison/complete) + SHARED capture/grade/review
+  endpoints hit with ``?variant=B``: authz/state guards (401/404/409) + full
+  happy path generate -> capture -> submit -> grade -> review -> comparison
+  -> complete.
 """
 
 from __future__ import annotations
@@ -580,11 +582,15 @@ class TestVariantBRouterGuards:
             with TestClient(app_module()) as client:
                 headers = {"x-user-id": str(user_id)}
                 assert (
-                    client.get(f"/cycles/{cycle_id}/variant-b/capture", headers=headers).status_code
+                    client.get(
+                        f"/cycles/{cycle_id}/capture", params={"variant": "B"}, headers=headers
+                    ).status_code
                     == 409
                 )
                 assert (
-                    client.post(f"/cycles/{cycle_id}/variant-b/grade", headers=headers).status_code
+                    client.post(
+                        f"/cycles/{cycle_id}/grade", params={"variant": "B"}, headers=headers
+                    ).status_code
                     == 409
                 )
                 assert (
@@ -654,8 +660,10 @@ class TestVariantBFullHappyPath:
                 assert gen_resp2.status_code == 201
                 assert gen_resp2.json()["assessment_id"] == b_doc["assessment_id"]
 
-                # 2. Capture view (memo-free).
-                capture_resp = client.get(f"/cycles/{cycle_id}/variant-b/capture", headers=headers)
+                # 2. Capture view (memo-free) — shared endpoint, ?variant=B.
+                capture_resp = client.get(
+                    f"/cycles/{cycle_id}/capture", params={"variant": "B"}, headers=headers
+                )
                 assert capture_resp.status_code == 200
                 capture_body = capture_resp.json()
                 assert "sections" in capture_body
@@ -669,7 +677,8 @@ class TestVariantBFullHappyPath:
                 qids = [q["qid"] for section in b_doc["sections"] for q in section["questions"]]
                 responses = [{"qid": qid, "attempted": True, "payload": {}} for qid in qids]
                 submit_resp = client.post(
-                    f"/cycles/{cycle_id}/variant-b/submissions",
+                    f"/cycles/{cycle_id}/submissions",
+                    params={"variant": "B"},
                     headers=headers,
                     json={"child_id": str(child_id), "responses": responses},
                 )
@@ -677,21 +686,26 @@ class TestVariantBFullHappyPath:
                 submission_id = uuid.UUID(submit_resp.json()["submission_id"])
                 marks_repo.register(submission_id, cycle_id, "B")
 
-                # 4. Grade.
-                grade_resp = client.post(f"/cycles/{cycle_id}/variant-b/grade", headers=headers)
+                # 4. Grade — shared endpoint, ?variant=B. Cycle state NOT advanced.
+                grade_resp = client.post(
+                    f"/cycles/{cycle_id}/grade", params={"variant": "B"}, headers=headers
+                )
                 assert grade_resp.status_code == 200, grade_resp.text
                 cycle = family_repo.get_cycle(cycle_id)
                 assert cycle is not None
                 assert cycle.state == CycleState.GENERATING_B  # NOT advanced
 
                 # 5. List marks + review any unresolved (CLAUDE_ASSIST) ones.
-                marks_resp = client.get(f"/cycles/{cycle_id}/variant-b/marks", headers=headers)
+                marks_resp = client.get(
+                    f"/cycles/{cycle_id}/marks", params={"variant": "B"}, headers=headers
+                )
                 assert marks_resp.status_code == 200
                 for item in marks_resp.json()["items"]:
                     mark = item["mark"]
                     if mark["final_marks"] is None:
                         patch_resp = client.patch(
-                            f"/cycles/{cycle_id}/variant-b/marks/{mark['question_id']}",
+                            f"/cycles/{cycle_id}/marks/{mark['question_id']}",
+                            params={"variant": "B"},
                             headers=headers,
                             json={"final_marks": "0"},
                         )
@@ -712,5 +726,103 @@ class TestVariantBFullHappyPath:
                 cycle = family_repo.get_cycle(cycle_id)
                 assert cycle is not None
                 assert cycle.state == CycleState.CYCLE_COMPLETE
+        finally:
+            _clear_overrides()
+
+
+# ---------------------------------------------------------------------------
+# Published-immutability write guard (universal, table-driven via PHASE_CONFIG)
+# ---------------------------------------------------------------------------
+
+
+class TestPublishedImmutabilityGuard:
+    """Once Variant A's marks are published, its writes are permanently
+    blocked (409) — the explicit replacement for the old isolation-by-
+    separate-endpoints guarantee. Variant B (never published in v1) must
+    still accept writes at GENERATING_B."""
+
+    def test_variant_a_writes_blocked_after_publish_variant_b_writes_ok(self) -> None:
+        user_id = uuid.uuid4()
+        family_repo = InMemoryFamilyRepository(user_id)
+        gap_repo = InMemoryGapReportRepository()
+        marks_repo = _VariantAwareMarksRepo()
+
+        family, child_id = family_repo.bootstrap_family("Fam", "Kid", "Grade 5")
+        assert child_id is not None
+        # This helper's cycle already passes through publish_marks() on its
+        # way to STUDY_PACK_DONE, so marks_published_at is already set.
+        cycle_id = _cycle_at_study_pack_done_with_gap_report(
+            family_repo, gap_repo, child_id=child_id
+        )
+        cycle = family_repo.get_cycle(cycle_id)
+        assert cycle is not None
+        assert cycle.marks_published_at is not None
+
+        _make_overrides(family_repo, gap_repo, marks_repo)
+        headers = {"x-user-id": str(user_id)}
+        try:
+            with TestClient(app_module()) as client:
+                # Variant A create_submission is blocked — published + immutable.
+                resp = client.post(
+                    f"/cycles/{cycle_id}/submissions",
+                    params={"variant": "A"},
+                    headers=headers,
+                    json={"child_id": str(child_id), "responses": []},
+                )
+                assert resp.status_code == 409
+                assert "published" in resp.json()["detail"].lower()
+
+                # Variant A grade is blocked.
+                resp = client.post(
+                    f"/cycles/{cycle_id}/grade", params={"variant": "A"}, headers=headers
+                )
+                assert resp.status_code == 409
+                assert "published" in resp.json()["detail"].lower()
+
+                # Variant A review PATCH is blocked.
+                resp = client.patch(
+                    f"/cycles/{cycle_id}/marks/A.1",
+                    params={"variant": "A"},
+                    headers=headers,
+                    json={"final_marks": "1.0"},
+                )
+                assert resp.status_code == 409
+                assert "published" in resp.json()["detail"].lower()
+
+                # Meanwhile, Variant B writes still work once GENERATING_B —
+                # B is never "published" in v1.
+                gen_resp = client.post(f"/cycles/{cycle_id}/variant-b", headers=headers)
+                assert gen_resp.status_code == 201, gen_resp.text
+                b_doc = gen_resp.json()
+
+                cycle = family_repo.get_cycle(cycle_id)
+                assert cycle is not None
+                assert cycle.state == CycleState.GENERATING_B
+
+                # On the in-memory tier, cycle.assessments is not auto-refreshed
+                # from the assessment repo after save() (unlike Postgres's
+                # join-on-read) — attach the B assessment manually, mirroring
+                # TestVariantBFullHappyPath.
+                b_assessment = Assessment.model_validate(b_doc)
+                family_repo._cycles[cycle_id] = cycle.model_copy(
+                    update={"assessments": [*cycle.assessments, b_assessment]}
+                )
+
+                qids = [q["qid"] for section in b_doc["sections"] for q in section["questions"]]
+                responses = [{"qid": qid, "attempted": True, "payload": {}} for qid in qids]
+                submit_resp = client.post(
+                    f"/cycles/{cycle_id}/submissions",
+                    params={"variant": "B"},
+                    headers=headers,
+                    json={"child_id": str(child_id), "responses": responses},
+                )
+                assert submit_resp.status_code == 201, submit_resp.text
+                submission_id = uuid.UUID(submit_resp.json()["submission_id"])
+                marks_repo.register(submission_id, cycle_id, "B")
+
+                grade_resp = client.post(
+                    f"/cycles/{cycle_id}/grade", params={"variant": "B"}, headers=headers
+                )
+                assert grade_resp.status_code == 200, grade_resp.text
         finally:
             _clear_overrides()

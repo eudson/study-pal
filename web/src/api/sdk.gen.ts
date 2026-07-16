@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CompleteCycleData, CompleteCycleErrors, CompleteCycleResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, CreateVariantBSubmissionData, CreateVariantBSubmissionErrors, CreateVariantBSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GenerateVariantBData, GenerateVariantBErrors, GenerateVariantBResponses, GetAbComparisonData, GetAbComparisonErrors, GetAbComparisonResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GetVariantBCaptureViewData, GetVariantBCaptureViewErrors, GetVariantBCaptureViewResponses, GetVariantBMarksData, GetVariantBMarksErrors, GetVariantBMarksResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, GradeVariantBData, GradeVariantBErrors, GradeVariantBResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, ReviewVariantBMarkData, ReviewVariantBMarkErrors, ReviewVariantBMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CompleteCycleData, CompleteCycleErrors, CompleteCycleResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GenerateVariantBData, GenerateVariantBErrors, GenerateVariantBResponses, GetAbComparisonData, GetAbComparisonErrors, GetAbComparisonResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -248,15 +248,16 @@ export const approveCycleDraft = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Return the memo-free child view of the approved assessment (cycle must be APPROVED_PRINTED).
+ * Return the memo-free child view of the approved assessment (variant defaults to A; A requires APPROVED_PRINTED, B requires GENERATING_B).
  *
- * Serve the Variant-A assessment to the child in kiosk mode.
+ * Serve the requested variant's assessment to the child in kiosk mode.
  *
  * Guards:
  * - Cycle exists in the caller's family (RLS enforced in repo layer).
- * - Cycle is in APPROVED_PRINTED — nothing is visible before parent approval
- * (golden rule 8).
- * - Assessment for this cycle exists (generation must have completed).
+ * - Cycle is in the variant's legal capture state (PHASE_CONFIG) — nothing
+ * is visible before parent approval (golden rule 8).
+ * - Assessment for this cycle + variant exists (generation must have
+ * completed).
  *
  * Returns a ``ChildAssessmentView`` that contains NO answer keys, memo text,
  * method notes, accepted alternatives, or any other information that would
@@ -269,19 +270,22 @@ export const getCaptureView = <ThrowOnError extends boolean = false>(options: Op
 });
 
 /**
- * Submit child answers; advances cycle APPROVED_PRINTED → ANSWERS_ENTERED.
+ * Submit child answers. Variant A advances APPROVED_PRINTED → ANSWERS_ENTERED; Variant B does not advance cycle state.
  *
  * Accept the child's responses and persist the submission.
  *
  * Server-side guards (none of these trust any client flag):
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Cycle is in APPROVED_PRINTED.
- * 3. body.child_id matches the cycle → subject → child_id chain.
- * 4. All qids in body.responses belong to the assessment.
+ * 2. The target variant's marks are not already published (409) — universal
+ * write guard, belt-and-suspenders on top of the state guard.
+ * 3. Cycle is in the variant's legal submit state (PHASE_CONFIG).
+ * 4. body.child_id matches the cycle → subject → child_id chain.
+ * 5. All qids in body.responses belong to the variant's assessment.
  *
  * On success:
  * - Submission is persisted via SubmissionRepository.
- * - Cycle advances APPROVED_PRINTED → ANSWERS_ENTERED via cycle service.
+ * - Variant A: cycle advances APPROVED_PRINTED → ANSWERS_ENTERED via cycle
+ * service. Variant B: no state advance (inferred from data presence).
  *
  * Grading is NOT triggered here (Phase 2).
  * proof_photo_paths are stored as-is; NEVER fed to grading (§10).
@@ -297,15 +301,17 @@ export const createSubmission = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
- * Grade the cycle's submission; upserts question_marks and advances cycle ANSWERS_ENTERED → AUTO_MARKED.
+ * Grade the cycle's submission for the given variant; upserts question_marks. Variant A advances ANSWERS_ENTERED → AUTO_MARKED; Variant B does not advance.
  *
  * Grade the submission and upsert marks.
  *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Cycle is in ANSWERS_ENTERED or AUTO_MARKED (idempotent re-grade).
- * 3. Submission exists for the cycle.
- * 4. Assessment exists for the cycle.
+ * 2. The target variant's marks are not already published (409).
+ * 3. Cycle is in the variant's legal grade state (PHASE_CONFIG). For
+ * Variant A this is ANSWERS_ENTERED or AUTO_MARKED (idempotent re-grade).
+ * 4. Submission exists for the cycle + variant.
+ * 5. Assessment exists for the cycle + variant.
  *
  * Proof photos are NEVER read (ARCHITECTURE.md §10).
  */
@@ -316,9 +322,9 @@ export const gradeSubmissionMarks = <ThrowOnError extends boolean = false>(optio
 });
 
 /**
- * List all question marks for the cycle, with question context for parent review.
+ * List all question marks for the cycle + variant, with question context for parent review.
  *
- * Return all marks for the cycle's submission.
+ * Return all marks for the cycle's submission (given variant).
  *
  * Includes question context (text, type, mark_rules) so the parent review
  * screen (Phase 3) can render each mark without re-fetching the assessment.
@@ -336,12 +342,15 @@ export const listQuestionMarks = <ThrowOnError extends boolean = false>(options:
  *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Cycle is in AUTO_MARKED or PARENT_REVIEW_MARKS.
- * 3. The question mark exists for this cycle's submission.
- * 4. final_marks (if provided) must be <= marks_total.
+ * 2. The target variant's marks are not already published (409).
+ * 3. Cycle is in the variant's legal review state (PHASE_CONFIG). For
+ * Variant A this is AUTO_MARKED or PARENT_REVIEW_MARKS.
+ * 4. The question mark exists for this cycle's submission + variant.
+ * 5. final_marks (if provided) must be <= marks_total.
  *
- * Transition: AUTO_MARKED → PARENT_REVIEW_MARKS on the first PATCH.
- * Already in PARENT_REVIEW_MARKS: no transition needed.
+ * Transition (Variant A only): AUTO_MARKED → PARENT_REVIEW_MARKS on the
+ * first PATCH. Already in PARENT_REVIEW_MARKS: no transition needed.
+ * Variant B never advances cycle state.
  */
 export const reviewQuestionMark = <ThrowOnError extends boolean = false>(options: Options<ReviewQuestionMarkData, ThrowOnError>): RequestResult<ReviewQuestionMarkResponses, ReviewQuestionMarkErrors, ThrowOnError> => (options.client ?? client).patch<ReviewQuestionMarkResponses, ReviewQuestionMarkErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -542,59 +551,6 @@ export const generateVariantB = <ThrowOnError extends boolean = false>(options: 
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
     url: '/cycles/{cycle_id}/variant-b',
     ...options
-});
-
-/**
- * Return the memo-free child view of the Variant B assessment (cycle must be GENERATING_B).
- */
-export const getVariantBCaptureView = <ThrowOnError extends boolean = false>(options: Options<GetVariantBCaptureViewData, ThrowOnError>): RequestResult<GetVariantBCaptureViewResponses, GetVariantBCaptureViewErrors, ThrowOnError> => (options.client ?? client).get<GetVariantBCaptureViewResponses, GetVariantBCaptureViewErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
-    url: '/cycles/{cycle_id}/variant-b/capture',
-    ...options
-});
-
-/**
- * Submit child answers for Variant B. Cycle state is NOT advanced.
- */
-export const createVariantBSubmission = <ThrowOnError extends boolean = false>(options: Options<CreateVariantBSubmissionData, ThrowOnError>): RequestResult<CreateVariantBSubmissionResponses, CreateVariantBSubmissionErrors, ThrowOnError> => (options.client ?? client).post<CreateVariantBSubmissionResponses, CreateVariantBSubmissionErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
-    url: '/cycles/{cycle_id}/variant-b/submissions',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Grade the Variant B submission; upserts marks. Cycle state is NOT advanced.
- */
-export const gradeVariantB = <ThrowOnError extends boolean = false>(options: Options<GradeVariantBData, ThrowOnError>): RequestResult<GradeVariantBResponses, GradeVariantBErrors, ThrowOnError> => (options.client ?? client).post<GradeVariantBResponses, GradeVariantBErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
-    url: '/cycles/{cycle_id}/variant-b/grade',
-    ...options
-});
-
-/**
- * List Variant B marks with question context (parent review screen).
- */
-export const getVariantBMarks = <ThrowOnError extends boolean = false>(options: Options<GetVariantBMarksData, ThrowOnError>): RequestResult<GetVariantBMarksResponses, GetVariantBMarksErrors, ThrowOnError> => (options.client ?? client).get<GetVariantBMarksResponses, GetVariantBMarksErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
-    url: '/cycles/{cycle_id}/variant-b/marks',
-    ...options
-});
-
-/**
- * Parent override of a single Variant B question mark.
- */
-export const reviewVariantBMark = <ThrowOnError extends boolean = false>(options: Options<ReviewVariantBMarkData, ThrowOnError>): RequestResult<ReviewVariantBMarkResponses, ReviewVariantBMarkErrors, ThrowOnError> => (options.client ?? client).patch<ReviewVariantBMarkResponses, ReviewVariantBMarkErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
-    url: '/cycles/{cycle_id}/variant-b/marks/{question_id}',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
 });
 
 /**

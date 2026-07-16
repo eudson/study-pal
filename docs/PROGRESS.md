@@ -372,6 +372,22 @@ hardcodes `14px` — candidate `--fs-stamp-label`.
 **Milestone:** the full diagnostic loop is now app-orchestrated end-to-end,
 `SCOPE_UPLOADED → CYCLE_COMPLETE`, on FakeClaude — build-plan Week 6 milestone met.
 
+**Follow-up refactor (same session, architect-directed) — variant-parameterized endpoints.**
+The initial cut used dedicated `variant_b.py` endpoints (isolation-by-separate-endpoints). The
+architect flagged the per-variant-file structure as a smell (implies `variant_c.py` tomorrow) and
+directed a full refactor: capture/grade/review are now ONE variant-parameterized set — `variant`
+is an optional query param defaulting to `"A"`, so A's URLs/operation_ids/behaviour are unchanged
+(the existing A tests pass **untouched** — the regression proof), and B calls the same endpoints
+with `?variant=B`. Per-variant phase rules (legal states + on-success advance + published
+predicate) live in one table `api/services/phase.py::PHASE_CONFIG`. The 5 duplicated B endpoints
+were deleted; `variant_b.py → retest.py` keeps only the B-specific 3 (`generateVariantB`,
+`getAbComparison`, `completeCycle`). The old isolation-safety property is replaced by an explicit
+**published-immutability write guard** (`is_published(cycle)` → 409 on any write to a published
+variant), regression-tested. Frontend collapsed its A/B SDK switch to single parameterized calls.
+A hypothetical Variant C is now a new `PHASE_CONFIG` row, zero new files. Verified: `make lint`
+clean, `make test` **379 passed** (+1 published-immutability test), codegen idempotent, `pnpm build`
+clean. Logged in ARCHITECTURE §10.
+
 **Next (all blocked-on-architect or deferred):** live Claude (C4 — needs real API key + go-ahead);
 Fixtures E1 (needs the 5 historical source artefacts); Supabase Storage for photos/scope; scoped
 child session token; a live eu-west-1 smoke + in-browser click-through of the Variant B tail.

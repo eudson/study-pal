@@ -2886,7 +2886,12 @@ export type GetCaptureViewData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/capture';
 };
 
@@ -2916,7 +2921,12 @@ export type CreateSubmissionData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/submissions';
 };
 
@@ -2946,7 +2956,12 @@ export type GradeSubmissionMarksData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/grade';
 };
 
@@ -2976,7 +2991,12 @@ export type ListQuestionMarksData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/marks';
 };
 
@@ -3010,7 +3030,12 @@ export type ReviewQuestionMarkData = {
          */
         question_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/marks/{question_id}';
 };
 
@@ -3299,160 +3324,6 @@ export type GenerateVariantBResponses = {
 };
 
 export type GenerateVariantBResponse = GenerateVariantBResponses[keyof GenerateVariantBResponses];
-
-export type GetVariantBCaptureViewData = {
-    body?: never;
-    path: {
-        /**
-         * Cycle Id
-         */
-        cycle_id: string;
-    };
-    query?: never;
-    url: '/cycles/{cycle_id}/variant-b/capture';
-};
-
-export type GetVariantBCaptureViewErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetVariantBCaptureViewError = GetVariantBCaptureViewErrors[keyof GetVariantBCaptureViewErrors];
-
-export type GetVariantBCaptureViewResponses = {
-    /**
-     * Successful Response
-     */
-    200: ChildAssessmentView;
-};
-
-export type GetVariantBCaptureViewResponse = GetVariantBCaptureViewResponses[keyof GetVariantBCaptureViewResponses];
-
-export type CreateVariantBSubmissionData = {
-    body: SubmissionCreate;
-    path: {
-        /**
-         * Cycle Id
-         */
-        cycle_id: string;
-    };
-    query?: never;
-    url: '/cycles/{cycle_id}/variant-b/submissions';
-};
-
-export type CreateVariantBSubmissionErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type CreateVariantBSubmissionError = CreateVariantBSubmissionErrors[keyof CreateVariantBSubmissionErrors];
-
-export type CreateVariantBSubmissionResponses = {
-    /**
-     * Successful Response
-     */
-    201: SubmissionResponse;
-};
-
-export type CreateVariantBSubmissionResponse = CreateVariantBSubmissionResponses[keyof CreateVariantBSubmissionResponses];
-
-export type GradeVariantBData = {
-    body?: never;
-    path: {
-        /**
-         * Cycle Id
-         */
-        cycle_id: string;
-    };
-    query?: never;
-    url: '/cycles/{cycle_id}/variant-b/grade';
-};
-
-export type GradeVariantBErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GradeVariantBError = GradeVariantBErrors[keyof GradeVariantBErrors];
-
-export type GradeVariantBResponses = {
-    /**
-     * Successful Response
-     */
-    200: GradeSubmissionResponse;
-};
-
-export type GradeVariantBResponse = GradeVariantBResponses[keyof GradeVariantBResponses];
-
-export type GetVariantBMarksData = {
-    body?: never;
-    path: {
-        /**
-         * Cycle Id
-         */
-        cycle_id: string;
-    };
-    query?: never;
-    url: '/cycles/{cycle_id}/variant-b/marks';
-};
-
-export type GetVariantBMarksErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetVariantBMarksError = GetVariantBMarksErrors[keyof GetVariantBMarksErrors];
-
-export type GetVariantBMarksResponses = {
-    /**
-     * Successful Response
-     */
-    200: ListMarksWithContextResponse;
-};
-
-export type GetVariantBMarksResponse = GetVariantBMarksResponses[keyof GetVariantBMarksResponses];
-
-export type ReviewVariantBMarkData = {
-    body: MarkPatchRequest;
-    path: {
-        /**
-         * Cycle Id
-         */
-        cycle_id: string;
-        /**
-         * Question Id
-         */
-        question_id: string;
-    };
-    query?: never;
-    url: '/cycles/{cycle_id}/variant-b/marks/{question_id}';
-};
-
-export type ReviewVariantBMarkErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ReviewVariantBMarkError = ReviewVariantBMarkErrors[keyof ReviewVariantBMarkErrors];
-
-export type ReviewVariantBMarkResponses = {
-    /**
-     * Successful Response
-     */
-    200: MarkPatchResponse;
-};
-
-export type ReviewVariantBMarkResponse = ReviewVariantBMarkResponses[keyof ReviewVariantBMarkResponses];
 
 export type GetAbComparisonData = {
     body?: never;
