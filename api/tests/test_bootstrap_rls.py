@@ -66,7 +66,9 @@ def _authed_dict_conn(user_id: uuid.UUID) -> psycopg.Connection[dict[str, Any]]:
         autocommit=False,
     )
     conn.execute("SET ROLE authenticated")
-    conn.execute(f"SET LOCAL request.jwt.claims = '{claims}'")  # noqa: S608
+    # Session-scope (not SET LOCAL) so the claim survives conn.commit() —
+    # see TestApprovalRecorded for the regression this fixes.
+    conn.execute("SELECT set_config('request.jwt.claims', %s, false)", (claims,))
     return conn
 
 

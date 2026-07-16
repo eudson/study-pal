@@ -786,10 +786,23 @@ class TestChildResultsRLS:
             )
 
             submission_id_a = uuid.uuid4()
+            submission_doc_a = json.dumps(
+                {
+                    "child_id": str(child_a),
+                    "responses": [],
+                    "proof_photo_paths": [],
+                }
+            )
             cur.execute(
-                "INSERT INTO submissions (id, family_id, assessment_id, cycle_id) "
-                "VALUES (%s, %s, %s, %s)",
-                (str(submission_id_a), str(family_a), str(asmt_id_a), str(cycle_a)),
+                "INSERT INTO submissions (id, family_id, assessment_id, child_id, submission) "
+                "VALUES (%s, %s, %s, %s, %s::jsonb)",
+                (
+                    str(submission_id_a),
+                    str(family_a),
+                    str(asmt_id_a),
+                    str(child_a),
+                    submission_doc_a,
+                ),
             )
 
             minimal_report = json.dumps(

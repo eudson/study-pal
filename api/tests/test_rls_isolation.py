@@ -153,8 +153,8 @@ def _baseline(
             "A",
             "Mathematics",
             "en",
-            8.0,
-            8.0,
+            9.0,
+            9.0,
             json.dumps(raw_a),
         ),
     )
@@ -172,8 +172,8 @@ def _baseline(
             "A",
             "Family-B-Subject",
             "en",
-            8.0,
-            8.0,
+            9.0,
+            9.0,
             json.dumps(raw_b),
         ),
     )

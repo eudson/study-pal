@@ -838,10 +838,23 @@ class TestGapReportRLS:
         )
 
         submission_id = uuid.uuid4()
+        submission_doc = json.dumps(
+            {
+                "child_id": str(child_id),
+                "responses": [],
+                "proof_photo_paths": [],
+            }
+        )
         cur.execute(
-            "INSERT INTO submissions (id, family_id, assessment_id, cycle_id) "
-            "VALUES (%s, %s, %s, %s)",
-            (str(submission_id), str(family_id), str(asmt_id), str(cycle_id)),
+            "INSERT INTO submissions (id, family_id, assessment_id, child_id, submission) "
+            "VALUES (%s, %s, %s, %s, %s::jsonb)",
+            (
+                str(submission_id),
+                str(family_id),
+                str(asmt_id),
+                str(child_id),
+                submission_doc,
+            ),
         )
 
         # Insert a minimal gap_report row directly.
