@@ -23,12 +23,14 @@ from schemas.assessment_schema import Assessment
 from schemas.family import (
     ChildResponse,
     ChildUpdate,
+    CyclePhase,
     CycleResponse,
     CycleRoundApproval,
     CycleState,
     FamilyResponse,
     SubjectResponse,
     VisibilityDefaults,
+    state_to_round_phase,
 )
 from services.repositories.postgres import DictConn
 
@@ -267,14 +269,14 @@ class PostgresFamilyRepository:
         cur = self._conn.cursor()
         cur.execute(
             """
-            INSERT INTO cycles (family_id, subject_id, scope_text, state)
-            VALUES (%s, %s, %s, 'SCOPE_UPLOADED')
-            RETURNING id, family_id, subject_id, state, scope_text,
+            INSERT INTO cycles (family_id, subject_id, scope_text, state, round, phase)
+            VALUES (%s, %s, %s, 'SCOPE_UPLOADED', 1, %s)
+            RETURNING id, family_id, subject_id, state, round, phase, scope_text,
                       parent_approval_at, parent_approval_note,
                       marks_published_at, published_visibility,
                       created_at, updated_at
             """,
-            (str(family_id), str(subject_id), scope_text),
+            (str(family_id), str(subject_id), scope_text, CyclePhase.SCOPE_UPLOADED.value),
         )
         row = cur.fetchone()
         if row is None:
@@ -286,7 +288,7 @@ class PostgresFamilyRepository:
         cur = self._conn.cursor()
         cur.execute(
             """
-            SELECT c.id, c.family_id, c.subject_id, c.state, c.scope_text,
+            SELECT c.id, c.family_id, c.subject_id, c.state, c.round, c.phase, c.scope_text,
                    c.parent_approval_at, c.parent_approval_note,
                    c.marks_published_at, c.published_visibility,
                    c.created_at, c.updated_at,
@@ -311,7 +313,7 @@ class PostgresFamilyRepository:
         cur = self._conn.cursor()
         cur.execute(
             """
-            SELECT id, family_id, subject_id, state, scope_text,
+            SELECT id, family_id, subject_id, state, round, phase, scope_text,
                    parent_approval_at, parent_approval_note,
                    marks_published_at, published_visibility,
                    created_at, updated_at
@@ -327,6 +329,8 @@ class PostgresFamilyRepository:
         self,
         cycle_id: uuid.UUID,
         new_state: CycleState,
+        round: int,  # noqa: A002
+        phase: CyclePhase,
         parent_approval_at: datetime | None = None,
         parent_approval_note: str | None = None,
     ) -> CycleResponse:
@@ -335,17 +339,21 @@ class PostgresFamilyRepository:
             """
             UPDATE cycles
             SET state                = %s,
+                round                = %s,
+                phase                = %s,
                 updated_at           = now(),
                 parent_approval_at   = COALESCE(%s, parent_approval_at),
                 parent_approval_note = COALESCE(%s, parent_approval_note)
             WHERE id = %s
-            RETURNING id, family_id, subject_id, state, scope_text,
+            RETURNING id, family_id, subject_id, state, round, phase, scope_text,
                       parent_approval_at, parent_approval_note,
                       marks_published_at, published_visibility,
                       created_at, updated_at
             """,
             (
                 new_state.value,
+                round,
+                phase.value,
                 parent_approval_at,
                 parent_approval_note,
                 str(cycle_id),
@@ -361,6 +369,8 @@ class PostgresFamilyRepository:
         self,
         cycle_id: uuid.UUID,
         new_state: CycleState,
+        round: int,  # noqa: A002
+        phase: CyclePhase,
         marks_published_at: datetime,
         published_visibility: VisibilityDefaults,
     ) -> CycleResponse:
@@ -370,17 +380,21 @@ class PostgresFamilyRepository:
             """
             UPDATE cycles
             SET state                 = %s,
+                round                 = %s,
+                phase                 = %s,
                 updated_at            = now(),
                 marks_published_at    = %s,
                 published_visibility  = %s::jsonb
             WHERE id = %s
-            RETURNING id, family_id, subject_id, state, scope_text,
+            RETURNING id, family_id, subject_id, state, round, phase, scope_text,
                       parent_approval_at, parent_approval_note,
                       marks_published_at, published_visibility,
                       created_at, updated_at
             """,
             (
                 new_state.value,
+                round,
+                phase.value,
                 marks_published_at,
                 published_visibility.model_dump_json(),
                 str(cycle_id),
@@ -544,6 +558,22 @@ def _row_to_cycle(row: dict[str, object]) -> CycleResponse:
         elif isinstance(published_visibility_raw, str):
             published_visibility = VisibilityDefaults.model_validate_json(published_visibility_raw)
 
+    # round/phase (P4, design §5): authoritative columns, always explicit —
+    # `state` is deprecated compat and is no longer a reliable source to
+    # re-derive them from (round_phase_to_state is round-agnostic post-P4).
+    # Fall back to the legacy state_to_round_phase backfill only for rows
+    # written before 0010's backfill populated `phase` (should not occur on a
+    # fully-migrated database, but keeps this defensive).
+    round_raw = row.get("round")
+    phase_raw = row.get("phase")
+    resolved_round: int
+    resolved_phase: CyclePhase
+    if round_raw is not None and phase_raw is not None:
+        resolved_round = int(round_raw)  # type: ignore[call-overload]
+        resolved_phase = CyclePhase(str(phase_raw))
+    else:
+        resolved_round, resolved_phase = state_to_round_phase(CycleState(str(row["state"])))
+
     return CycleResponse(
         id=uuid.UUID(str(row["id"])),
         family_id=uuid.UUID(str(row["family_id"])),
@@ -563,6 +593,8 @@ def _row_to_cycle(row: dict[str, object]) -> CycleResponse:
         created_at=_parse_dt(row["created_at"]),
         updated_at=_parse_dt(row["updated_at"]),
         assessments=assessments,
+        round=resolved_round,
+        phase=resolved_phase,
     )
 
 

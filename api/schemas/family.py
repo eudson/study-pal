@@ -97,27 +97,27 @@ _STATE_TO_ROUND_PHASE: dict[CycleState, tuple[int, CyclePhase]] = {
     CycleState.CYCLE_COMPLETE: (2, CyclePhase.COMPLETE),
 }
 
-# (round, phase) -> state — NOT 1:1 (design §6.4): STUDY_PACK collapses two old
-# states (GENERATING_STUDY_PACK / STUDY_PACK_DONE).  Canonical choice for the
-# reverse map: STUDY_PACK_DONE (the "settled" state — safe default for any
-# reader still keying off the shadowed `state` column).  Only round 1 and 2
-# are populated (P1 has no round >= 3 concept yet); round 1 phases map back to
-# their round-1 states, round 2 phases to their round-2 (GENERATING_B/
-# CYCLE_COMPLETE) states — this mirrors the only two rounds the backfill can
-# produce (design §4 backfill table endpoints: (1, SCOPE_UPLOADED) and
-# (2, COMPLETE) confirmed correct below).
-_ROUND_PHASE_TO_STATE: dict[tuple[int, CyclePhase], CycleState] = {
-    (1, CyclePhase.SCOPE_UPLOADED): CycleState.SCOPE_UPLOADED,
-    (1, CyclePhase.GENERATING): CycleState.GENERATING_A,
-    (1, CyclePhase.DRAFT_REVIEW): CycleState.PARENT_REVIEWS_DRAFT,
-    (1, CyclePhase.PRINTED): CycleState.APPROVED_PRINTED,
-    (1, CyclePhase.ANSWERS_ENTERED): CycleState.ANSWERS_ENTERED,
-    (1, CyclePhase.MARKED): CycleState.AUTO_MARKED,
-    (1, CyclePhase.REVIEW_MARKS): CycleState.PARENT_REVIEW_MARKS,
-    (1, CyclePhase.PUBLISHED): CycleState.GAP_REPORT,
-    (1, CyclePhase.STUDY_PACK): CycleState.STUDY_PACK_DONE,
-    (2, CyclePhase.GENERATING): CycleState.GENERATING_B,
-    (2, CyclePhase.COMPLETE): CycleState.CYCLE_COMPLETE,
+# phase -> state (P4, design §5): ROUND-AGNOSTIC — the canonical legacy state
+# for a given phase, the SAME regardless of round.  This is the P4 collapse:
+# round 2 now gets real intermediate phases uniform with round 1 (design §2),
+# so ``state`` can no longer encode round information (it never really did
+# for anything except the old round-2 collapse, which is retired here).
+# ``state`` is deprecated compat only (dropped in P6) — it exists solely to
+# keep ``CycleResponse.state`` populated for the stale TS client through P5.
+# NOTHING may branch on `state` for control flow anymore; all logic keys on
+# (round, phase).  STUDY_PACK collapses two legacy states (design §6.4); the
+# canonical choice is the settled STUDY_PACK_DONE.
+_PHASE_TO_STATE: dict[CyclePhase, CycleState] = {
+    CyclePhase.SCOPE_UPLOADED: CycleState.SCOPE_UPLOADED,
+    CyclePhase.GENERATING: CycleState.GENERATING_A,
+    CyclePhase.DRAFT_REVIEW: CycleState.PARENT_REVIEWS_DRAFT,
+    CyclePhase.PRINTED: CycleState.APPROVED_PRINTED,
+    CyclePhase.ANSWERS_ENTERED: CycleState.ANSWERS_ENTERED,
+    CyclePhase.MARKED: CycleState.AUTO_MARKED,
+    CyclePhase.REVIEW_MARKS: CycleState.PARENT_REVIEW_MARKS,
+    CyclePhase.PUBLISHED: CycleState.GAP_REPORT,
+    CyclePhase.STUDY_PACK: CycleState.STUDY_PACK_DONE,
+    CyclePhase.COMPLETE: CycleState.CYCLE_COMPLETE,
 }
 
 
@@ -125,19 +125,27 @@ def state_to_round_phase(state: CycleState) -> tuple[int, CyclePhase]:
     """Map a (legacy) flat ``CycleState`` to its ``(round, phase)`` pair.
 
     Total over all 12 ``CycleState`` members (design §4 backfill table).
+    This is the round-1 BACKFILL mapping only — used for reading legacy rows
+    written before P4 (or by ``CycleResponse``'s fallback validator below).
+    It is NOT the inverse of the (now round-agnostic) ``round_phase_to_state``
+    — do not round-trip through both for a round >= 2 cycle.
     """
     return _STATE_TO_ROUND_PHASE[state]
 
 
 def round_phase_to_state(round: int, phase: CyclePhase) -> CycleState:  # noqa: A002
-    """Map ``(round, phase)`` back to the (legacy, shadowed) ``CycleState``.
+    """Map ``phase`` alone (ROUND-AGNOSTIC, design §5 P4) to the canonical
+    (legacy, shadowed) ``CycleState``.
 
-    NOT 1:1 with ``state_to_round_phase`` — ``(1, STUDY_PACK)`` collapses two
-    old states; the canonical choice is ``STUDY_PACK_DONE`` (design §6.4).
-    Raises ``KeyError`` for any ``(round, phase)`` pair with no P1 backfill
-    origin (e.g. round >= 3 — not yet representable by the legacy enum).
+    ``round`` is accepted for call-site symmetry but intentionally unused —
+    the P4 collapse means round 2's real intermediate phases share the exact
+    same legacy state values as round 1's (e.g. both rounds' PRINTED phase ->
+    APPROVED_PRINTED).  ``state`` is deprecated compat only; nothing may
+    branch on it.  STUDY_PACK collapses two old states; the canonical choice
+    is STUDY_PACK_DONE (design §6.4).
     """
-    return _ROUND_PHASE_TO_STATE[(round, phase)]
+    del round  # deprecated-state mapping keys off phase only — see docstring
+    return _PHASE_TO_STATE[phase]
 
 
 # ---------------------------------------------------------------------------

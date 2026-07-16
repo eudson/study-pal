@@ -4,35 +4,36 @@ All cycle state transitions MUST go through this module — never by direct
 column updates elsewhere.  Every child-visible transition records parent
 approval + timestamp (golden rule 8).
 
-P2 of the generic (round, phase) redesign
-(docs/design/round-phase-architecture.md §5, §7): the state machine now
-runs on the generic ``advance_phase`` / ``start_next_round`` primitives,
-keyed on ``(round, phase)`` rather than the flat 12-value ``CycleState``.
-The historical ``advance_to_*`` functions below are kept — signatures
-UNCHANGED — as thin delegating wrappers so ``services/phase.py`` and every
-router (unmodified in P2) keep working exactly as before.
+P4 of the generic (round, phase) redesign
+(docs/design/round-phase-architecture.md §2, §5, §7): round 2 now gets REAL
+phases, uniform with round 1 — the P2 "round >= 2 collapses GENERATING
+straight to COMPLETE" special-case is gone.  Every round now traverses the
+identical ``_PHASE_ALLOWED`` map via the generic ``advance_phase`` /
+``start_next_round`` primitives, keyed on ``(round, phase)`` rather than the
+flat 12-value ``CycleState``.  The historical ``advance_to_*`` functions
+below are kept — signatures UNCHANGED — as thin delegating wrappers so every
+router keeps working exactly as before for round 1 (the regression net).
 
-``state`` remains the DRIVER column persisted on every write (via
-``round_phase_to_state``) — this is the P2-P4 compat shim (design §6.4);
-it is dropped only in P6.
+``state`` remains a DEPRECATED, shadowed compat column (design §6.4,
+dropped in P6) populated via the now ROUND-AGNOSTIC ``round_phase_to_state``
+(keys off phase alone) — nothing in this module (or anywhere else) may
+branch on it for control flow.  All logic here keys on ``(round, phase)``.
 
-Implemented transitions (round 1, unchanged since P1):
-    SCOPE_UPLOADED → GENERATING_A
-    GENERATING_A   → PARENT_REVIEWS_DRAFT
-    PARENT_REVIEWS_DRAFT → APPROVED_PRINTED
-    APPROVED_PRINTED → ANSWERS_ENTERED
-    ANSWERS_ENTERED  → AUTO_MARKED
-    AUTO_MARKED      → PARENT_REVIEW_MARKS
-    PARENT_REVIEW_MARKS → GAP_REPORT
-    GAP_REPORT → GENERATING_STUDY_PACK
-    GENERATING_STUDY_PACK → STUDY_PACK_DONE
-    STUDY_PACK_DONE → GENERATING_B
-    GENERATING_B → CYCLE_COMPLETE
+Implemented transitions, identical for every round (design §2, §3):
+    SCOPE_UPLOADED → GENERATING          (round 1 only — round 2+ starts at GENERATING)
+    GENERATING     → DRAFT_REVIEW
+    DRAFT_REVIEW   → PRINTED
+    PRINTED        → ANSWERS_ENTERED
+    ANSWERS_ENTERED → MARKED
+    MARKED         → REVIEW_MARKS
+    REVIEW_MARKS   → PUBLISHED
+    PUBLISHED      → STUDY_PACK
+    (round, STUDY_PACK | PUBLISHED) → (round + 1, GENERATING)   -- start_next_round
+    (final round, PUBLISHED | STUDY_PACK) → COMPLETE            -- advance_to_cycle_complete
 
-Every one of the above is still reachable, in the same order, producing the
-exact same resulting ``CycleState`` values — the regression net for this
-refactor (design §7: "existing A tests, re-expressed in phases, stay
-green" is a hard gate).
+Round 1's exact resulting ``CycleState`` values at every step are unchanged
+from before this refactor — the regression net (design §7: "existing A
+tests, re-expressed in phases, stay green" is a hard gate).
 """
 
 from __future__ import annotations
@@ -97,16 +98,13 @@ def _require_cycle(repo: FamilyRepository, cycle_id: uuid.UUID) -> CycleResponse
 def _legal_next_phase(round_: int, phase: CyclePhase) -> CyclePhase | None:
     """Return the only legal next phase from (round_, phase), or None (terminal).
 
-    CRITICAL COMPAT (design §2): round 2's real intermediate phases
-    (DRAFT_REVIEW/PRINTED/…) are not wired until P3 — Variant B's entire
-    capture→grade→review sub-loop is still crammed into the single
-    ``(2, GENERATING)`` state today.  So round >= 2 collapses straight from
-    GENERATING to COMPLETE, exactly matching the legacy
-    ``GENERATING_B → CYCLE_COMPLETE`` transition.  Every other round/phase
-    combination uses the generic, round-independent map.
+    P4 (design §2, §3): every round follows the exact same
+    ``_PHASE_ALLOWED`` map — the P2 round >= 2 collapse is retired.  ``round_``
+    is accepted for signature symmetry with the rest of this module (and
+    because a future round-specific exception is plausible), but the map
+    itself is round-independent by design.
     """
-    if round_ >= 2 and phase is CyclePhase.GENERATING:
-        return CyclePhase.COMPLETE
+    del round_
     return _PHASE_ALLOWED.get(phase)
 
 
@@ -165,13 +163,15 @@ def advance_phase(
         updated = repo.update_cycle_state(
             cycle_id,
             new_state,
+            cycle.round,
+            target_phase,
             parent_approval_at=approval_at,
             parent_approval_note=note,
         )
         repo.record_round_draft_approval(cycle_id, cycle.round, approval_at, note)
         return updated
 
-    return repo.update_cycle_state(cycle_id, new_state)
+    return repo.update_cycle_state(cycle_id, new_state, cycle.round, target_phase)
 
 
 def start_next_round(repo: FamilyRepository, cycle_id: uuid.UUID) -> CycleResponse:
@@ -196,7 +196,7 @@ def start_next_round(repo: FamilyRepository, cycle_id: uuid.UUID) -> CycleRespon
         )
     new_round = cycle.round + 1
     new_state = round_phase_to_state(new_round, CyclePhase.GENERATING)
-    return repo.update_cycle_state(cycle_id, new_state)
+    return repo.update_cycle_state(cycle_id, new_state, new_round, CyclePhase.GENERATING)
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +311,8 @@ def publish_marks(
     updated = repo.publish_marks(
         cycle_id,
         new_state=new_state,
+        round=cycle.round,
+        phase=CyclePhase.PUBLISHED,
         marks_published_at=approval_at,
         published_visibility=published_visibility,
     )
@@ -328,19 +330,22 @@ def advance_to_generating_study_pack(
     Not a child-visible gate — the child sees nothing until the pack is
     approved via the approve endpoint (golden rule 8).
 
-    LEGACY (design §6 sub-question 1, to be revisited in P3): the generic
-    model has a single ``STUDY_PACK`` phase with status inferred from the
-    study_pack row (generation is synchronous — no durable "generating"
-    state to represent).  ``GENERATING_STUDY_PACK`` therefore has no
-    distinct phase of its own; this wrapper validates the ``PUBLISHED →
-    STUDY_PACK`` phase transition generically, then writes the exact
-    legacy waypoint state directly (``round_phase_to_state`` only knows the
-    settled ``STUDY_PACK_DONE`` value for the ``STUDY_PACK`` phase — design
-    §6.4 — so it cannot produce this transient state).
+    LEGACY (design §6 sub-question 1): the generic model has a single
+    ``STUDY_PACK`` phase with status inferred from the study_pack row
+    (generation is synchronous — no durable "generating" state to
+    represent).  ``GENERATING_STUDY_PACK`` therefore has no distinct phase
+    of its own; this wrapper validates the ``PUBLISHED → STUDY_PACK`` phase
+    transition generically, then writes the exact legacy waypoint state
+    directly (``round_phase_to_state`` only knows the settled
+    ``STUDY_PACK_DONE`` value for the ``STUDY_PACK`` phase — design §6.4 —
+    so it cannot produce this transient state).  Applies identically to
+    every round.
     """
     cycle = _require_cycle(repo, cycle_id)
     _assert_phase_transition(cycle.round, cycle.phase, CyclePhase.STUDY_PACK)
-    return repo.update_cycle_state(cycle_id, CycleState.GENERATING_STUDY_PACK)
+    return repo.update_cycle_state(
+        cycle_id, CycleState.GENERATING_STUDY_PACK, cycle.round, CyclePhase.STUDY_PACK
+    )
 
 
 def advance_to_study_pack_done(
@@ -353,11 +358,11 @@ def advance_to_study_pack_done(
     Not a child-visible gate — child visibility is gated on
     POST /cycles/{id}/study-pack/approve (golden rule 8).
 
-    LEGACY (design §6 sub-question 1, to be revisited in P3): both the
-    before and after state share the single generic ``STUDY_PACK`` phase —
-    this is a within-phase legacy sub-status transition, not modelled by
-    the generic phase map, so it is validated directly against the exact
-    legacy waypoint state rather than via ``advance_phase``.
+    LEGACY (design §6 sub-question 1): both the before and after state share
+    the single generic ``STUDY_PACK`` phase — this is a within-phase legacy
+    sub-status transition, not modelled by the generic phase map, so it is
+    validated directly against the exact legacy waypoint state rather than
+    via ``advance_phase``.  Applies identically to every round.
     """
     cycle = _require_cycle(repo, cycle_id)
     if cycle.phase is not CyclePhase.STUDY_PACK or cycle.state != CycleState.GENERATING_STUDY_PACK:
@@ -366,21 +371,24 @@ def advance_to_study_pack_done(
             f"{CycleState.STUDY_PACK_DONE.value!r}. Expected current state: "
             f"{CycleState.GENERATING_STUDY_PACK.value!r}."
         )
-    return repo.update_cycle_state(cycle_id, CycleState.STUDY_PACK_DONE)
+    return repo.update_cycle_state(
+        cycle_id, CycleState.STUDY_PACK_DONE, cycle.round, CyclePhase.STUDY_PACK
+    )
 
 
 def advance_to_generating_b(
     repo: FamilyRepository,
     cycle_id: uuid.UUID,
 ) -> CycleResponse:
-    """STUDY_PACK_DONE → GENERATING_B.
+    """(round, STUDY_PACK settled | PUBLISHED) → (round + 1, GENERATING).
 
-    Called when Variant B generation is kicked off (Week 6 retest tail).
-    Not a child-visible gate — Variant B results are deferred (nothing
-    child-visible in v1); no parent_approval_at is recorded here.
+    Called when the next round's (Variant B, in v1) generation is kicked
+    off.  Not a child-visible gate in itself — the next round's own
+    DRAFT_REVIEW approval is what golden rule 8 requires (recorded when the
+    parent approves that round's draft, same as round 1).
 
-    This is the generic ``start_next_round`` transition: (1, STUDY_PACK
-    settled | PUBLISHED) → (2, GENERATING).
+    This is exactly the generic ``start_next_round`` transition; the name is
+    kept for router/test compat (retired in a later pass — design §5).
     """
     return start_next_round(repo, cycle_id)
 
@@ -389,17 +397,36 @@ def advance_to_cycle_complete(
     repo: FamilyRepository,
     cycle_id: uuid.UUID,
 ) -> CycleResponse:
-    """GENERATING_B → CYCLE_COMPLETE.
+    """(final round, PUBLISHED | settled STUDY_PACK) → COMPLETE.
 
-    Terminal transition for the cycle. Called once Variant B has been fully
-    captured, graded, reviewed, and the A-vs-B comparison is derivable.
-    CYCLE_COMPLETE publishes nothing new to the child, so golden rule 8
-    (child-visible transitions require recorded parent approval) is not
-    triggered here — no parent_approval_at is recorded.
+    Terminal transition for the cycle. Called once the final round has been
+    fully captured, graded, reviewed, and published (and, for round >= 2,
+    the cross-round comparison is derivable). COMPLETE publishes nothing new
+    to the child beyond what the round's own PUBLISHED gate already did, so
+    golden rule 8 is not re-triggered here — no parent_approval_at is
+    recorded.
 
-    LEGACY round-2 path (design §2 "CRITICAL COMPAT", to be revisited in
-    P3): round 2's real DRAFT_REVIEW/PRINTED/…/PUBLISHED phases are not
-    wired yet, so this is the collapsed ``(2, GENERATING) → (2, COMPLETE)``
-    transition, handled by ``_legal_next_phase``'s round >= 2 special case.
+    P4 (design §2, §3, §5 pin): COMPLETE is reachable from a round's PUBLISHED
+    *or* its settled STUDY_PACK phase — exactly the same two legal
+    predecessors as ``start_next_round`` (pack is optional). Because two
+    different phases both legally advance here, this is NOT modelled by the
+    single-successor ``_PHASE_ALLOWED`` map used by ``advance_phase`` (which
+    already sends PUBLISHED -> STUDY_PACK for the "start another round"
+    path) — it is its own dedicated terminal entry point, mirroring
+    ``start_next_round``'s bespoke legality check. Round-independent: any
+    round (not just round 2) reaches COMPLETE this way once it is the final
+    round.
     """
-    return advance_phase(repo, cycle_id, CyclePhase.COMPLETE)
+    cycle = _require_cycle(repo, cycle_id)
+    settled_study_pack_state = round_phase_to_state(cycle.round, CyclePhase.STUDY_PACK)
+    is_legal = cycle.phase is CyclePhase.PUBLISHED or (
+        cycle.phase is CyclePhase.STUDY_PACK and cycle.state == settled_study_pack_state
+    )
+    if not is_legal:
+        raise IllegalTransitionError(
+            f"Cannot complete the cycle from state {cycle.state.value!r} "
+            f"(round={cycle.round}, phase={cycle.phase.value!r}). Expected a settled "
+            "'STUDY_PACK' phase or 'PUBLISHED'."
+        )
+    new_state = round_phase_to_state(cycle.round, CyclePhase.COMPLETE)
+    return repo.update_cycle_state(cycle_id, new_state, cycle.round, CyclePhase.COMPLETE)

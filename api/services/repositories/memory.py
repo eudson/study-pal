@@ -13,13 +13,13 @@ from schemas.capture import SubmissionCreate, SubmissionResponse
 from schemas.family import (
     ChildResponse,
     ChildUpdate,
+    CyclePhase,
     CycleResponse,
     CycleRoundApproval,
     CycleState,
     FamilyResponse,
     SubjectResponse,
     VisibilityDefaults,
-    state_to_round_phase,
 )
 from schemas.gap_report import GapReport, GapReportRow
 from schemas.grading import QuestionMark
@@ -193,6 +193,8 @@ class InMemoryFamilyRepository:
             family_id=family_id,
             subject_id=subject_id,
             state=CycleState.SCOPE_UPLOADED,
+            round=1,
+            phase=CyclePhase.SCOPE_UPLOADED,
             scope_text=scope_text,
             created_at=now,
             updated_at=now,
@@ -211,18 +213,19 @@ class InMemoryFamilyRepository:
         self,
         cycle_id: uuid.UUID,
         new_state: CycleState,
+        round: int,  # noqa: A002
+        phase: CyclePhase,
         parent_approval_at: datetime | None = None,
         parent_approval_note: str | None = None,
     ) -> CycleResponse:
         cycle = self._cycles.get(cycle_id)
         if cycle is None:
             raise ValueError(f"Cycle {cycle_id} not found")
-        new_round, new_phase = state_to_round_phase(new_state)
         updated = cycle.model_copy(
             update={
                 "state": new_state,
-                "round": new_round,
-                "phase": new_phase,
+                "round": round,
+                "phase": phase,
                 "updated_at": _now(),
                 "parent_approval_at": parent_approval_at or cycle.parent_approval_at,
                 "parent_approval_note": parent_approval_note or cycle.parent_approval_note,
@@ -235,6 +238,8 @@ class InMemoryFamilyRepository:
         self,
         cycle_id: uuid.UUID,
         new_state: CycleState,
+        round: int,  # noqa: A002
+        phase: CyclePhase,
         marks_published_at: datetime,
         published_visibility: VisibilityDefaults,
     ) -> CycleResponse:
@@ -242,12 +247,11 @@ class InMemoryFamilyRepository:
         cycle = self._cycles.get(cycle_id)
         if cycle is None:
             raise ValueError(f"Cycle {cycle_id} not found")
-        new_round, new_phase = state_to_round_phase(new_state)
         updated = cycle.model_copy(
             update={
                 "state": new_state,
-                "round": new_round,
-                "phase": new_phase,
+                "round": round,
+                "phase": phase,
                 "updated_at": _now(),
                 "marks_published_at": marks_published_at,
                 "published_visibility": published_visibility,

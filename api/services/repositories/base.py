@@ -16,6 +16,7 @@ from schemas.capture import SubmissionCreate, SubmissionResponse
 from schemas.family import (
     ChildResponse,
     ChildUpdate,
+    CyclePhase,
     CycleResponse,
     CycleRoundApproval,
     CycleState,
@@ -118,18 +119,31 @@ class FamilyRepository(Protocol):
         self,
         cycle_id: uuid.UUID,
         new_state: CycleState,
+        round: int,  # noqa: A002
+        phase: CyclePhase,
         parent_approval_at: datetime | None = None,
         parent_approval_note: str | None = None,
-    ) -> CycleResponse: ...
+    ) -> CycleResponse:
+        """Advance the cycle's ``(round, phase)`` and (deprecated, compat) ``state``.
+
+        ``round``/``phase`` are the authoritative axis (P4, design §5) and are
+        always explicit — they can no longer be reliably re-derived from
+        ``new_state`` alone, since ``round_phase_to_state`` is round-agnostic
+        (round 2's real intermediate phases share round 1's legacy state
+        values).  Repos persist ``round``/``phase`` verbatim.
+        """
+        ...
 
     def publish_marks(
         self,
         cycle_id: uuid.UUID,
         new_state: CycleState,
+        round: int,  # noqa: A002
+        phase: CyclePhase,
         marks_published_at: datetime,
         published_visibility: VisibilityDefaults,
     ) -> CycleResponse:
-        """Record marks publish: set state, marks_published_at, published_visibility."""
+        """Record marks publish: set state/round/phase, marks_published_at, published_visibility."""
         ...
 
     # -- Per-round approvals (design §4.6 `cycle_round_approvals`) --

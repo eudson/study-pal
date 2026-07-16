@@ -1,16 +1,27 @@
-"""Unit tests for Week 6 — Variant B retest + A/B comparison.
+"""Unit tests for the retest (round 2 / "Variant B") flow + A/B comparison.
+
+P4 of the generic (round, phase) redesign (docs/design/round-phase-
+architecture.md §2, §3, §5, §7): round 2 now traverses the exact same real
+phase sequence as round 1 — GENERATING -> DRAFT_REVIEW -> PRINTED ->
+ANSWERS_ENTERED -> MARKED -> REVIEW_MARKS -> PUBLISHED -> COMPLETE — with its
+own parent DRAFT_REVIEW approval and publish gate, recorded per round in
+``cycle_round_approvals``. This supersedes the old flow where Variant B's
+entire capture->grade->review sub-loop was crammed into a single
+``GENERATING_B`` state.
 
 Coverage:
-- cycle.py: advance_to_generating_b / advance_to_cycle_complete (legal + illegal).
+- cycle.py: start_next_round / advance_to_cycle_complete (legal + illegal)
+  for round 2.
 - GenerationService.generate_variant_b: schema-valid variant="B", gap_tags
   propagated, deterministic.
 - A+B COEXISTENCE (advisor guardrail #3): list_for_cycle(cycle_id, variant)
   never bleeds A and B marks together; grading B leaves A's marks unchanged.
 - derive_ab_comparison: closed/persisting/new partitioning incl. half-marks.
-- retest router (generate/comparison/complete) + SHARED capture/grade/review
-  endpoints hit with ``?variant=B``: authz/state guards (401/404/409) + full
-  happy path generate -> capture -> submit -> grade -> review -> comparison
-  -> complete.
+- retest router (generateVariantB/comparison/complete) + SHARED
+  capture/grade/review/approve/publish endpoints hit with ``?variant=B``:
+  authz/phase guards (401/404/409) + the full happy path generate ->
+  approve draft -> capture -> submit -> grade -> review -> publish ->
+  comparison -> complete, asserting the round-2 approval rows are recorded.
 """
 
 from __future__ import annotations
@@ -30,24 +41,25 @@ from schemas.assessment_schema import (
     GradingPath,
     VariantBRequest,
 )
-from schemas.family import CycleState, VisibilityDefaults
+from schemas.family import CyclePhase, CycleState, VisibilityDefaults
 from schemas.gap_report import GapReport, GapReportItem, GapReportSummary, GapStatus
 from schemas.grading import QuestionMark
 from services.claude_client import FakeClaude
 from services.comparison import derive_ab_comparison
 from services.cycle import (
     IllegalTransitionError,
+    advance_phase,
     advance_to_answers_entered,
     advance_to_auto_marked,
     advance_to_cycle_complete,
     advance_to_generating,
-    advance_to_generating_b,
     advance_to_generating_study_pack,
     advance_to_parent_review_marks,
     advance_to_parent_reviews,
     advance_to_study_pack_done,
     approve_draft,
     publish_marks,
+    start_next_round,
 )
 from services.generation_service import GenerationService
 from services.repositories.memory import (
@@ -64,12 +76,35 @@ def _assessment(raw: dict[str, Any] | None = None) -> Assessment:
     return Assessment.model_validate(raw or maths_assessment())
 
 
+def _full_round_1(repo: InMemoryFamilyRepository, cycle_id: uuid.UUID) -> None:
+    """Walk a fresh cycle through round 1 to a settled STUDY_PACK_DONE."""
+    advance_to_generating(repo, cycle_id)
+    advance_to_parent_reviews(repo, cycle_id)
+    approve_draft(repo, cycle_id)
+    advance_to_answers_entered(repo, cycle_id)
+    advance_to_auto_marked(repo, cycle_id)
+    advance_to_parent_review_marks(repo, cycle_id)
+    publish_marks(repo, cycle_id, VisibilityDefaults())
+    advance_to_generating_study_pack(repo, cycle_id)
+    advance_to_study_pack_done(repo, cycle_id)
+
+
+def _walk_round_2_to_published(repo: InMemoryFamilyRepository, cycle_id: uuid.UUID) -> None:
+    """From (2, GENERATING) walk the real phase sequence to (2, PUBLISHED)."""
+    advance_phase(repo, cycle_id, CyclePhase.DRAFT_REVIEW)
+    advance_phase(repo, cycle_id, CyclePhase.PRINTED)
+    advance_phase(repo, cycle_id, CyclePhase.ANSWERS_ENTERED)
+    advance_phase(repo, cycle_id, CyclePhase.MARKED)
+    advance_phase(repo, cycle_id, CyclePhase.REVIEW_MARKS)
+    publish_marks(repo, cycle_id, VisibilityDefaults())
+
+
 # ---------------------------------------------------------------------------
-# cycle.py transitions
+# cycle.py transitions: start_next_round / advance_to_cycle_complete
 # ---------------------------------------------------------------------------
 
 
-class TestAdvanceToGeneratingB:
+class TestStartNextRoundToRoundTwo:
     def test_legal_from_study_pack_done(self) -> None:
         user_id = uuid.uuid4()
         repo = InMemoryFamilyRepository(user_id)
@@ -77,18 +112,11 @@ class TestAdvanceToGeneratingB:
         subject = repo.create_subject(family.id, uuid.uuid4(), "Maths", "en")
         cycle = repo.create_cycle(family.id, subject.id, "scope")
 
-        advance_to_generating(repo, cycle.id)
-        advance_to_parent_reviews(repo, cycle.id)
-        approve_draft(repo, cycle.id)
-        advance_to_answers_entered(repo, cycle.id)
-        advance_to_auto_marked(repo, cycle.id)
-        advance_to_parent_review_marks(repo, cycle.id)
-        publish_marks(repo, cycle.id, VisibilityDefaults())
-        advance_to_generating_study_pack(repo, cycle.id)
-        advance_to_study_pack_done(repo, cycle.id)
+        _full_round_1(repo, cycle.id)
 
-        updated = advance_to_generating_b(repo, cycle.id)
-        assert updated.state == CycleState.GENERATING_B
+        updated = start_next_round(repo, cycle.id)
+        assert updated.round == 2
+        assert updated.phase == CyclePhase.GENERATING
 
     def test_illegal_from_scope_uploaded(self) -> None:
         user_id = uuid.uuid4()
@@ -98,47 +126,37 @@ class TestAdvanceToGeneratingB:
         cycle = repo.create_cycle(family.id, subject.id, "scope")
 
         with pytest.raises(IllegalTransitionError):
-            advance_to_generating_b(repo, cycle.id)
+            start_next_round(repo, cycle.id)
 
 
 class TestAdvanceToCycleComplete:
-    def test_legal_from_generating_b(self) -> None:
+    def test_legal_from_round_2_published(self) -> None:
+        """Round 2 must walk its own real phases to PUBLISHED before COMPLETE
+        — the old (2, GENERATING) -> (2, COMPLETE) collapse is retired."""
         user_id = uuid.uuid4()
         repo = InMemoryFamilyRepository(user_id)
         family, _ = repo.bootstrap_family("Test", None, None)
         subject = repo.create_subject(family.id, uuid.uuid4(), "Maths", "en")
         cycle = repo.create_cycle(family.id, subject.id, "scope")
 
-        advance_to_generating(repo, cycle.id)
-        advance_to_parent_reviews(repo, cycle.id)
-        approve_draft(repo, cycle.id)
-        advance_to_answers_entered(repo, cycle.id)
-        advance_to_auto_marked(repo, cycle.id)
-        advance_to_parent_review_marks(repo, cycle.id)
-        publish_marks(repo, cycle.id, VisibilityDefaults())
-        advance_to_generating_study_pack(repo, cycle.id)
-        advance_to_study_pack_done(repo, cycle.id)
-        advance_to_generating_b(repo, cycle.id)
+        _full_round_1(repo, cycle.id)
+        start_next_round(repo, cycle.id)
+        _walk_round_2_to_published(repo, cycle.id)
 
         updated = advance_to_cycle_complete(repo, cycle.id)
         assert updated.state == CycleState.CYCLE_COMPLETE
+        assert updated.round == 2
+        assert updated.phase == CyclePhase.COMPLETE
 
-    def test_illegal_from_study_pack_done(self) -> None:
+    def test_illegal_from_round_2_generating(self) -> None:
         user_id = uuid.uuid4()
         repo = InMemoryFamilyRepository(user_id)
         family, _ = repo.bootstrap_family("Test", None, None)
         subject = repo.create_subject(family.id, uuid.uuid4(), "Maths", "en")
         cycle = repo.create_cycle(family.id, subject.id, "scope")
 
-        advance_to_generating(repo, cycle.id)
-        advance_to_parent_reviews(repo, cycle.id)
-        approve_draft(repo, cycle.id)
-        advance_to_answers_entered(repo, cycle.id)
-        advance_to_auto_marked(repo, cycle.id)
-        advance_to_parent_review_marks(repo, cycle.id)
-        publish_marks(repo, cycle.id, VisibilityDefaults())
-        advance_to_generating_study_pack(repo, cycle.id)
-        advance_to_study_pack_done(repo, cycle.id)
+        _full_round_1(repo, cycle.id)
+        start_next_round(repo, cycle.id)
 
         with pytest.raises(IllegalTransitionError):
             advance_to_cycle_complete(repo, cycle.id)
@@ -422,7 +440,7 @@ class TestDeriveAbComparison:
 
 
 # ---------------------------------------------------------------------------
-# Router: authz / state guards + full happy path
+# Router: authz / phase guards + full happy path
 # ---------------------------------------------------------------------------
 
 
@@ -477,21 +495,14 @@ def _cycle_at_study_pack_done_with_gap_report(
     *,
     child_id: uuid.UUID,
 ) -> uuid.UUID:
-    """Create a cycle at STUDY_PACK_DONE, with a Variant-A assessment attached
-    and a stored gap report carrying a growing gap_tag (for retargeting)."""
+    """Create a cycle at (round 1, STUDY_PACK settled), with a Variant-A
+    assessment attached and a stored gap report carrying a growing gap_tag
+    (for retargeting)."""
     family, _ = family_repo.bootstrap_family("Test Family", None, None)
     subject = family_repo.create_subject(family.id, child_id, "Maths", "en")
     cycle = family_repo.create_cycle(family.id, subject.id, "scope")
 
-    advance_to_generating(family_repo, cycle.id)
-    advance_to_parent_reviews(family_repo, cycle.id)
-    approve_draft(family_repo, cycle.id)
-    advance_to_answers_entered(family_repo, cycle.id)
-    advance_to_auto_marked(family_repo, cycle.id)
-    advance_to_parent_review_marks(family_repo, cycle.id)
-    publish_marks(family_repo, cycle.id, VisibilityDefaults())
-    advance_to_generating_study_pack(family_repo, cycle.id)
-    advance_to_study_pack_done(family_repo, cycle.id)
+    _full_round_1(family_repo, cycle.id)
 
     variant_a = Assessment.model_validate({**maths_assessment(), "cycle_id": str(cycle.id)})
     raw_cycle = family_repo.get_cycle(cycle.id)
@@ -508,11 +519,47 @@ def _cycle_at_study_pack_done_with_gap_report(
     return cycle.id
 
 
+def app_module() -> Any:
+    from main import app
+
+    return app
+
+
+def _answered_responses(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build a non-empty, type-appropriate payload per question.
+
+    ``grade_submission`` treats an empty ``payload`` as "not attempted"
+    regardless of the ``attempted`` flag — a non-empty payload is required
+    so the CLAUDE_ASSIST questions (calculation/table_completion) come back
+    ``needs_review=True`` and drive the MARKED -> REVIEW_MARKS transition
+    via the review PATCH loop below.
+    """
+    payload_by_type: dict[str, dict[str, Any]] = {
+        "mcq": {"selected_index": 0},
+        "true_false": {"value": True},
+        "matching": {"pairs": []},
+        "ordering": {"order": []},
+        "fill_blank": {"values": ["x"]},
+        "short_answer": {"text": "x"},
+        "calculation": {"answer": "0", "working": "x"},
+        "table_completion": {"cells": [{"row": 0, "col": 0, "value": "x"}]},
+        "labelling": {"labels": {}},
+        "extended_response": {"text": "x"},
+    }
+    return [
+        {
+            "qid": q["qid"],
+            "attempted": True,
+            "payload": payload_by_type.get(q["question_type"], {"value": "x"}),
+        }
+        for section in doc["sections"]
+        for q in section["questions"]
+    ]
+
+
 class TestVariantBRouterGuards:
     def test_unauth_returns_401(self) -> None:
-        from main import app
-
-        with TestClient(app) as client:
+        with TestClient(app_module()) as client:
             resp = client.post(f"/cycles/{uuid.uuid4()}/variant-b")
         assert resp.status_code == 401
 
@@ -542,7 +589,7 @@ class TestVariantBRouterGuards:
             _clear_overrides()
         assert resp.status_code in (404, 409)
 
-    def test_wrong_state_returns_409(self) -> None:
+    def test_wrong_phase_returns_409(self) -> None:
         user_id = uuid.uuid4()
         family_repo = InMemoryFamilyRepository(user_id)
         gap_repo = InMemoryGapReportRepository()
@@ -564,8 +611,8 @@ class TestVariantBRouterGuards:
         assert resp.status_code == 409
 
     def test_b_subroutes_409_before_generation(self) -> None:
-        """capture/submissions/grade/marks/comparison/complete 409 before
-        Variant B has been generated (cycle still STUDY_PACK_DONE)."""
+        """capture/grade/comparison/complete 409 before round 2 has been
+        started (cycle still round 1, settled STUDY_PACK)."""
         user_id = uuid.uuid4()
         family_repo = InMemoryFamilyRepository(user_id)
         gap_repo = InMemoryGapReportRepository()
@@ -603,14 +650,10 @@ class TestVariantBRouterGuards:
             _clear_overrides()
 
 
-def app_module() -> Any:
-    from main import app
-
-    return app
-
-
 class TestVariantBFullHappyPath:
-    def test_generate_capture_submit_grade_review_comparison_complete(self) -> None:
+    def test_generate_approve_capture_submit_grade_review_publish_comparison_complete(
+        self,
+    ) -> None:
         user_id = uuid.uuid4()
         family_repo = InMemoryFamilyRepository(user_id)
         gap_repo = InMemoryGapReportRepository()
@@ -627,7 +670,7 @@ class TestVariantBFullHappyPath:
 
         try:
             with TestClient(app_module()) as client:
-                # 1. Generate Variant B.
+                # 1. Start round 2 + generate its assessment.
                 gen_resp = client.post(f"/cycles/{cycle_id}/variant-b", headers=headers)
                 assert gen_resp.status_code == 201, gen_resp.text
                 b_doc = gen_resp.json()
@@ -642,40 +685,58 @@ class TestVariantBFullHappyPath:
 
                 cycle = family_repo.get_cycle(cycle_id)
                 assert cycle is not None
-                assert cycle.state == CycleState.GENERATING_B
+                assert cycle.round == 2
+                assert cycle.phase == CyclePhase.DRAFT_REVIEW
 
-                # Idempotent re-call returns the same assessment (no regeneration).
                 # On the in-memory tier the cycle's ``assessments`` list is not
                 # auto-refreshed from the assessment repo after save() (unlike
-                # the Postgres tier's join-on-read) — attach it manually here to
-                # simulate what a real read would show, then prove idempotency.
+                # the Postgres tier's join-on-read) — attach it manually here.
                 b_assessment = Assessment.model_validate(b_doc)
-                cycle = family_repo.get_cycle(cycle_id)
-                assert cycle is not None
                 family_repo._cycles[cycle_id] = cycle.model_copy(
                     update={"assessments": [*cycle.assessments, b_assessment]}
                 )
 
+                # Idempotent re-call returns the same assessment, does not
+                # regenerate, and does not re-advance the phase.
                 gen_resp2 = client.post(f"/cycles/{cycle_id}/variant-b", headers=headers)
                 assert gen_resp2.status_code == 201
                 assert gen_resp2.json()["assessment_id"] == b_doc["assessment_id"]
+                cycle = family_repo.get_cycle(cycle_id)
+                assert cycle is not None
+                assert cycle.phase == CyclePhase.DRAFT_REVIEW
 
-                # 2. Capture view (memo-free) — shared endpoint, ?variant=B.
+                # 2. Parent approves round 2's draft — the SAME endpoint round 1
+                #    uses (golden rule 8, per-round approval row).
+                approve_resp = client.post(
+                    f"/cycles/{cycle_id}/approve", headers=headers, json={"note": "round 2 ok"}
+                )
+                assert approve_resp.status_code == 200, approve_resp.text
+                cycle = family_repo.get_cycle(cycle_id)
+                assert cycle is not None
+                assert cycle.phase == CyclePhase.PRINTED
+
+                round_2_approval = family_repo.get_round_approval(cycle_id, 2)
+                assert round_2_approval is not None
+                assert round_2_approval.draft_approved_at is not None
+                assert round_2_approval.draft_approval_note == "round 2 ok"
+                # Round 1's approval row is untouched by round 2's approval.
+                round_1_approval = family_repo.get_round_approval(cycle_id, 1)
+                assert round_1_approval is not None
+                assert round_1_approval.draft_approved_at is not None
+
+                # 3. Capture view (memo-free) — shared endpoint, ?variant=B.
                 capture_resp = client.get(
                     f"/cycles/{cycle_id}/capture", params={"variant": "B"}, headers=headers
                 )
                 assert capture_resp.status_code == 200
                 capture_body = capture_resp.json()
                 assert "sections" in capture_body
-                assert "memo" not in str(capture_body).lower() or True  # structural check below
                 for section in capture_body["sections"]:
                     for q in section["questions"]:
                         assert "answer" not in q  # no answer key leaked to child view
 
-                # 3. Submit responses (auto-gradeable questions only need be correct
-                #    for full-marks path; others go through review below).
-                qids = [q["qid"] for section in b_doc["sections"] for q in section["questions"]]
-                responses = [{"qid": qid, "attempted": True, "payload": {}} for qid in qids]
+                # 4. Submit responses.
+                responses = _answered_responses(b_doc)
                 submit_resp = client.post(
                     f"/cycles/{cycle_id}/submissions",
                     params={"variant": "B"},
@@ -686,16 +747,35 @@ class TestVariantBFullHappyPath:
                 submission_id = uuid.UUID(submit_resp.json()["submission_id"])
                 marks_repo.register(submission_id, cycle_id, "B")
 
-                # 4. Grade — shared endpoint, ?variant=B. Cycle state NOT advanced.
+                cycle = family_repo.get_cycle(cycle_id)
+                assert cycle is not None
+                assert cycle.phase == CyclePhase.ANSWERS_ENTERED
+
+                # 5. Grade — shared endpoint, ?variant=B. Advances to MARKED.
                 grade_resp = client.post(
                     f"/cycles/{cycle_id}/grade", params={"variant": "B"}, headers=headers
                 )
                 assert grade_resp.status_code == 200, grade_resp.text
                 cycle = family_repo.get_cycle(cycle_id)
                 assert cycle is not None
-                assert cycle.state == CycleState.GENERATING_B  # NOT advanced
+                assert cycle.phase == CyclePhase.MARKED
 
-                # 5. List marks + review any unresolved (CLAUDE_ASSIST) ones.
+                # The InMemory submission repo doesn't retain full response
+                # payloads for grading (services/grading.py's `_get_responses`
+                # InMemory fallback returns []), so the real grader always
+                # sees "not attempted" here — seed one mark as an unresolved
+                # CLAUDE_ASSIST outcome directly (established pattern for this
+                # InMemory-tier limitation) to exercise the review PATCH ->
+                # REVIEW_MARKS transition realistically.
+                existing_marks = marks_repo.list_for_submission(submission_id)
+                assert existing_marks
+                unresolved_mark = existing_marks[0].model_copy(
+                    update={"final_marks": None, "needs_review": True}
+                )
+                marks_repo.bulk_upsert(family.id, submission_id, [unresolved_mark])
+
+                # 6. List marks + review any unresolved (CLAUDE_ASSIST) ones —
+                #    first PATCH advances MARKED -> REVIEW_MARKS.
                 marks_resp = client.get(
                     f"/cycles/{cycle_id}/marks", params={"variant": "B"}, headers=headers
                 )
@@ -711,14 +791,35 @@ class TestVariantBFullHappyPath:
                         )
                         assert patch_resp.status_code == 200
 
-                # 6. Comparison.
+                cycle = family_repo.get_cycle(cycle_id)
+                assert cycle is not None
+                assert cycle.phase == CyclePhase.REVIEW_MARKS
+
+                # 7. Publish round 2's marks — the SAME endpoint round 1 uses,
+                #    ?variant=B. Transitions REVIEW_MARKS -> PUBLISHED.
+                publish_resp = client.post(
+                    f"/cycles/{cycle_id}/publish",
+                    params={"variant": "B"},
+                    headers=headers,
+                    json={},
+                )
+                assert publish_resp.status_code == 200, publish_resp.text
+                cycle = family_repo.get_cycle(cycle_id)
+                assert cycle is not None
+                assert cycle.phase == CyclePhase.PUBLISHED
+
+                round_2_approval = family_repo.get_round_approval(cycle_id, 2)
+                assert round_2_approval is not None
+                assert round_2_approval.marks_published_at is not None
+
+                # 8. Comparison.
                 comparison_resp = client.get(f"/cycles/{cycle_id}/comparison", headers=headers)
                 assert comparison_resp.status_code == 200, comparison_resp.text
                 comparison_body = comparison_resp.json()
                 assert comparison_body["cycle_id"] == str(cycle_id)
                 assert "summary" in comparison_body
 
-                # 7. Complete.
+                # 9. Complete.
                 complete_resp = client.post(f"/cycles/{cycle_id}/complete", headers=headers)
                 assert complete_resp.status_code == 200, complete_resp.text
                 assert complete_resp.json()["state"] == CycleState.CYCLE_COMPLETE.value
@@ -726,6 +827,8 @@ class TestVariantBFullHappyPath:
                 cycle = family_repo.get_cycle(cycle_id)
                 assert cycle is not None
                 assert cycle.state == CycleState.CYCLE_COMPLETE
+                assert cycle.round == 2
+                assert cycle.phase == CyclePhase.COMPLETE
         finally:
             _clear_overrides()
 
@@ -736,12 +839,11 @@ class TestVariantBFullHappyPath:
 
 
 class TestPublishedImmutabilityGuard:
-    """Once Variant A's marks are published, its writes are permanently
-    blocked (409) — the explicit replacement for the old isolation-by-
-    separate-endpoints guarantee. Variant B (never published in v1) must
-    still accept writes at GENERATING_B."""
+    """Once round 1's marks are published, its writes are permanently
+    blocked (409) — per-round, via ``cycle_round_approvals``. Round 2 (not
+    yet published) must still accept writes once it reaches PRINTED."""
 
-    def test_variant_a_writes_blocked_after_publish_variant_b_writes_ok(self) -> None:
+    def test_round_1_writes_blocked_after_publish_round_2_writes_ok(self) -> None:
         user_id = uuid.uuid4()
         family_repo = InMemoryFamilyRepository(user_id)
         gap_repo = InMemoryGapReportRepository()
@@ -750,19 +852,19 @@ class TestPublishedImmutabilityGuard:
         family, child_id = family_repo.bootstrap_family("Fam", "Kid", "Grade 5")
         assert child_id is not None
         # This helper's cycle already passes through publish_marks() on its
-        # way to STUDY_PACK_DONE, so marks_published_at is already set.
+        # way to a settled STUDY_PACK, so round 1's marks_published_at is set.
         cycle_id = _cycle_at_study_pack_done_with_gap_report(
             family_repo, gap_repo, child_id=child_id
         )
-        cycle = family_repo.get_cycle(cycle_id)
-        assert cycle is not None
-        assert cycle.marks_published_at is not None
+        round_1_approval = family_repo.get_round_approval(cycle_id, 1)
+        assert round_1_approval is not None
+        assert round_1_approval.marks_published_at is not None
 
         _make_overrides(family_repo, gap_repo, marks_repo)
         headers = {"x-user-id": str(user_id)}
         try:
             with TestClient(app_module()) as client:
-                # Variant A create_submission is blocked — published + immutable.
+                # Round 1 (Variant A) create_submission is blocked — published + immutable.
                 resp = client.post(
                     f"/cycles/{cycle_id}/submissions",
                     params={"variant": "A"},
@@ -772,14 +874,14 @@ class TestPublishedImmutabilityGuard:
                 assert resp.status_code == 409
                 assert "published" in resp.json()["detail"].lower()
 
-                # Variant A grade is blocked.
+                # Round 1 grade is blocked.
                 resp = client.post(
                     f"/cycles/{cycle_id}/grade", params={"variant": "A"}, headers=headers
                 )
                 assert resp.status_code == 409
                 assert "published" in resp.json()["detail"].lower()
 
-                # Variant A review PATCH is blocked.
+                # Round 1 review PATCH is blocked.
                 resp = client.patch(
                     f"/cycles/{cycle_id}/marks/A.1",
                     params={"variant": "A"},
@@ -789,15 +891,16 @@ class TestPublishedImmutabilityGuard:
                 assert resp.status_code == 409
                 assert "published" in resp.json()["detail"].lower()
 
-                # Meanwhile, Variant B writes still work once GENERATING_B —
-                # B is never "published" in v1.
+                # Meanwhile, round 2 (Variant B) writes still work once
+                # started — round 2 is never published yet at this point.
                 gen_resp = client.post(f"/cycles/{cycle_id}/variant-b", headers=headers)
                 assert gen_resp.status_code == 201, gen_resp.text
                 b_doc = gen_resp.json()
 
                 cycle = family_repo.get_cycle(cycle_id)
                 assert cycle is not None
-                assert cycle.state == CycleState.GENERATING_B
+                assert cycle.round == 2
+                assert cycle.phase == CyclePhase.DRAFT_REVIEW
 
                 # On the in-memory tier, cycle.assessments is not auto-refreshed
                 # from the assessment repo after save() (unlike Postgres's
@@ -808,8 +911,10 @@ class TestPublishedImmutabilityGuard:
                     update={"assessments": [*cycle.assessments, b_assessment]}
                 )
 
-                qids = [q["qid"] for section in b_doc["sections"] for q in section["questions"]]
-                responses = [{"qid": qid, "attempted": True, "payload": {}} for qid in qids]
+                approve_resp = client.post(f"/cycles/{cycle_id}/approve", headers=headers, json={})
+                assert approve_resp.status_code == 200, approve_resp.text
+
+                responses = _answered_responses(b_doc)
                 submit_resp = client.post(
                     f"/cycles/{cycle_id}/submissions",
                     params={"variant": "B"},

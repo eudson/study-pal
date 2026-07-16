@@ -1,21 +1,22 @@
 """Child answer capture endpoints.
 
-Two endpoints, variant-parameterized (``?variant=A|B``, default ``A``):
+Two endpoints, variant-parameterized (``?variant=A|B``, default ``A``); the
+variant selects the assessment/round but every guard below is generic,
+phase-driven (docs/design/round-phase-architecture.md §3, §5, §7 P4) —
+identical for every round (the old per-variant A/B fork is retired):
 
     GET  /cycles/{cycle_id}/capture
         Returns a memo-free ChildAssessmentView for the child to work through.
-        Guard (per PHASE_CONFIG): Variant A requires APPROVED_PRINTED; Variant
-        B requires GENERATING_B.  The cycle and its assessment are resolved
-        via RLS in the caller's family.
+        Guard (per PHASE_CONFIG): the cycle must be at PRINTED. The cycle and
+        its assessment are resolved via RLS in the caller's family.
 
     POST /cycles/{cycle_id}/submissions
-        Accepts the child's responses. For Variant A, advances the cycle to
-        ANSWERS_ENTERED. Variant B does NOT advance cycle state (the B phase
-        is inferred from data presence, not a new state).
+        Accepts the child's responses. Advances the cycle PRINTED ->
+        ANSWERS_ENTERED (table-driven, PHASE_CONFIG).
         Server-side guards (NEVER trusting any client mode flag):
           - Cycle resolves in the caller's family (RLS).
-          - Cycle is in the variant's legal state (PHASE_CONFIG).
-          - The target variant's marks are not already published (409).
+          - Cycle is at the variant's legal phase (PHASE_CONFIG).
+          - The target round's marks are not already published (409).
           - Submission child_id matches the cycle's subject's child_id.
         Photo paths are stored for audit only; never fed to grading (§10).
 
@@ -24,7 +25,7 @@ Security note (recorded for PROGRESS log):
     Authorization is therefore the existing family RLS — there is no
     separate child auth token.  This means a parent user could, in theory,
     call these endpoints themselves.  The content-safety boundary is enforced
-    by these server-side guards (state check, child_id match) — NOT by a
+    by these server-side guards (phase check, child_id match) — NOT by a
     client mode flag.  Future work (Phase 3+) may introduce a limited
     child session token if the UX requires it; for MVP the kiosk session
     is the accepted risk (architect decision A).
@@ -49,7 +50,13 @@ from schemas.identity import Identity
 from services.auth import get_identity
 from services.capture_service import project_for_child
 from services.cycle import IllegalTransitionError
-from services.phase import PHASE_CONFIG, apply_advance, resolve_assessment
+from services.phase import (
+    PHASE_CONFIG,
+    apply_advance,
+    is_published,
+    resolve_assessment,
+    round_for_variant,
+)
 from services.repositories.base import (
     AssessmentRepository,
     FamilyRepository,
@@ -67,7 +74,7 @@ router = APIRouter(prefix="/cycles")
     operation_id="get_capture_view",
     summary=(
         "Return the memo-free child view of the approved assessment "
-        "(variant defaults to A; A requires APPROVED_PRINTED, B requires GENERATING_B)."
+        "(variant defaults to A; every round requires PRINTED)."
     ),
 )
 def get_capture_view(
@@ -99,14 +106,13 @@ def get_capture_view(
             detail="Cycle not found.",
         )
 
-    config = PHASE_CONFIG[variant]
-    if not config.capture.is_legal(cycle.state):
+    if not PHASE_CONFIG.capture.is_legal(cycle.phase):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; "
+                f"Cycle is in phase '{cycle.phase.value}'; "
                 f"Variant {variant} capture view is only available when the cycle is "
-                f"{config.capture.label()}."
+                f"{PHASE_CONFIG.capture.label()}."
             ),
         )
 
@@ -125,10 +131,7 @@ def get_capture_view(
     response_model=SubmissionResponse,
     status_code=status.HTTP_201_CREATED,
     operation_id="create_submission",
-    summary=(
-        "Submit child answers. Variant A advances APPROVED_PRINTED → ANSWERS_ENTERED; "
-        "Variant B does not advance cycle state."
-    ),
+    summary="Submit child answers. Advances PRINTED → ANSWERS_ENTERED (every round).",
 )
 def create_submission(
     cycle_id: uuid.UUID,
@@ -143,16 +146,16 @@ def create_submission(
 
     Server-side guards (none of these trust any client flag):
     1. Cycle exists in the caller's family (RLS).
-    2. The target variant's marks are not already published (409) — universal
-       write guard, belt-and-suspenders on top of the state guard.
-    3. Cycle is in the variant's legal submit state (PHASE_CONFIG).
+    2. The target round's marks are not already published (409) — universal
+       write guard, belt-and-suspenders on top of the phase guard.
+    3. Cycle is at the variant's legal submit phase (PHASE_CONFIG).
     4. body.child_id matches the cycle → subject → child_id chain.
     5. All qids in body.responses belong to the variant's assessment.
 
     On success:
     - Submission is persisted via SubmissionRepository.
-    - Variant A: cycle advances APPROVED_PRINTED → ANSWERS_ENTERED via cycle
-      service. Variant B: no state advance (inferred from data presence).
+    - Cycle advances PRINTED → ANSWERS_ENTERED via the cycle service
+      (table-driven, PHASE_CONFIG — identical for every round).
 
     Grading is NOT triggered here (Phase 2).
     proof_photo_paths are stored as-is; NEVER fed to grading (§10).
@@ -166,21 +169,21 @@ def create_submission(
             detail="Cycle not found.",
         )
 
-    config = PHASE_CONFIG[variant]
+    round_ = round_for_variant(variant)
 
-    if config.is_published(cycle):
+    if is_published(family_repo, cycle_id, round_):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Variant {variant} marks are published and immutable.",
         )
 
-    if not config.submit.is_legal(cycle.state):
+    if not PHASE_CONFIG.submit.is_legal(cycle.phase):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; "
+                f"Cycle is in phase '{cycle.phase.value}'; "
                 f"Variant {variant} submissions are only accepted when the cycle is "
-                f"{config.submit.label()}."
+                f"{PHASE_CONFIG.submit.label()}."
             ),
         )
 
@@ -225,9 +228,9 @@ def create_submission(
         cycle_id=cycle_id,
     )
 
-    # Advance state (Variant A only — table-driven, see PHASE_CONFIG).
+    # Advance phase (table-driven, see PHASE_CONFIG — identical for every round).
     try:
-        apply_advance(config.submit, family_repo, cycle_id, cycle.state)
+        apply_advance(PHASE_CONFIG.submit, family_repo, cycle_id, cycle.phase)
     except IllegalTransitionError as exc:
         # Submission is already persisted; state advance failure is non-fatal.
         # Log and continue — the submission is the authoritative record.

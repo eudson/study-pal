@@ -55,7 +55,13 @@ from schemas.identity import Identity
 from services.auth import get_identity
 from services.cycle import IllegalTransitionError
 from services.grading import FakeGrader, grade_submission
-from services.phase import PHASE_CONFIG, apply_advance, resolve_assessment
+from services.phase import (
+    PHASE_CONFIG,
+    apply_advance,
+    is_published,
+    resolve_assessment,
+    round_for_variant,
+)
 from services.repositories.base import (
     FamilyRepository,
     QuestionMarkRepository,
@@ -106,20 +112,20 @@ def grade_submission_endpoint(
             detail="Cycle not found.",
         )
 
-    config = PHASE_CONFIG[variant]
+    round_ = round_for_variant(variant)
 
-    if config.is_published(cycle):
+    if is_published(family_repo, cycle_id, round_):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Variant {variant} marks are published and immutable.",
         )
 
-    if not config.grade.is_legal(cycle.state):
+    if not PHASE_CONFIG.grade.is_legal(cycle.phase):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; "
-                f"grading Variant {variant} requires the cycle to be {config.grade.label()}."
+                f"Cycle is in phase '{cycle.phase.value}'; "
+                f"grading Variant {variant} requires the cycle to be {PHASE_CONFIG.grade.label()}."
             ),
         )
 
@@ -169,10 +175,10 @@ def grade_submission_endpoint(
     # Upsert marks.
     persisted = marks_repo.bulk_upsert(family_id, submission_id_from_repo, marks)
 
-    # Advance cycle state (Variant A only, and only from ANSWERS_ENTERED —
-    # idempotent re-grade from AUTO_MARKED does not re-advance).
+    # Advance cycle phase (identical for every round, only from ANSWERS_ENTERED —
+    # idempotent re-grade from MARKED does not re-advance).
     try:
-        apply_advance(config.grade, family_repo, cycle_id, cycle.state)
+        apply_advance(PHASE_CONFIG.grade, family_repo, cycle_id, cycle.phase)
     except IllegalTransitionError as exc:
         log.warning(
             "grade_submission_endpoint: state advance failed for cycle %s variant %s: %s",
@@ -235,13 +241,12 @@ def list_question_marks(
             detail="Cycle not found.",
         )
 
-    config = PHASE_CONFIG[variant]
-    if not config.marks_get.is_legal(cycle.state):
+    if not PHASE_CONFIG.marks_get.is_legal(cycle.phase):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; "
-                f"Variant {variant} marks require the cycle to be {config.marks_get.label()}."
+                f"Cycle is in phase '{cycle.phase.value}'; "
+                f"Variant {variant} marks require the cycle to be {PHASE_CONFIG.marks_get.label()}."
             ),
         )
 

@@ -91,16 +91,23 @@ def test_round_phase_to_state_study_pack_canonical_choice() -> None:
 
 @pytest.mark.parametrize("state", list(CycleState))
 def test_round_trip_where_defined(state: CycleState) -> None:
-    """state -> (round, phase) -> state round-trips for every state except the
+    """state -> (round, phase) -> state round-trips for every state except:
 
-    two that collapse into the single STUDY_PACK phase (design §6.4): only
-    STUDY_PACK_DONE is the canonical reverse of (1, STUDY_PACK), so
-    GENERATING_STUDY_PACK does not round-trip to itself (by design).
+    - GENERATING_STUDY_PACK / STUDY_PACK_DONE: both collapse into the single
+      STUDY_PACK phase (design §6.4); only STUDY_PACK_DONE is the canonical
+      reverse.
+    - GENERATING_B: P4 (design §5) makes ``round_phase_to_state`` ROUND-
+      AGNOSTIC — round 2's GENERATING phase now maps back to the SAME legacy
+      value as round 1's (GENERATING_A), by design (round 2 gets real phases
+      uniform with round 1; ``state`` is deprecated compat only and no
+      longer round-specific).
     """
     round_, phase = state_to_round_phase(state)
     reconstructed = round_phase_to_state(round_, phase)
     if state is CycleState.GENERATING_STUDY_PACK:
         assert reconstructed == CycleState.STUDY_PACK_DONE
+    elif state is CycleState.GENERATING_B:
+        assert reconstructed == CycleState.GENERATING_A
     else:
         assert reconstructed == state
 

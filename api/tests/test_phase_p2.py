@@ -1,11 +1,17 @@
-"""Unit tests for P2 of the generic (round, phase) cycle redesign.
+"""Unit tests for P2/P4 of the generic (round, phase) cycle redesign.
 
-docs/design/round-phase-architecture.md §5 (backend collapse), §7 (P2 scope).
+docs/design/round-phase-architecture.md §5 (backend collapse), §7 (P2/P4 scope).
 
-Covers the new generic primitives (``advance_phase`` / ``start_next_round``),
-the per-round approval dual-write (``cycle_round_approvals``), and confirms
-every legacy ``advance_to_*`` wrapper still produces the exact same resulting
-``CycleState`` values as before P2 (the regression net — design §7).
+Covers the generic primitives (``advance_phase`` / ``start_next_round``), the
+per-round approval dual-write (``cycle_round_approvals``), and confirms every
+legacy ``advance_to_*`` wrapper still produces the exact same resulting round
+1 ``CycleState`` values as before this redesign (the regression net — design
+§7). The P2-era round-2 collapse ("GENERATING -> COMPLETE direct") is retired
+in P4 — round 2 now gets real phases uniform with round 1 (design §2); the
+tests below exercise that instead (``TestRoundTwoRealPhases``).  ``state`` is
+deprecated compat only and is now ROUND-AGNOSTIC (keys off phase alone,
+design §5) — round 2's legacy ``state`` values equal round 1's at the same
+phase (e.g. both rounds' GENERATING -> ``GENERATING_A``).
 """
 
 from __future__ import annotations
@@ -124,7 +130,8 @@ class TestAdvancePhaseIllegal:
 
 
 # ---------------------------------------------------------------------------
-# Round-2 collapse compat (design §2 "CRITICAL COMPAT")
+# Round-2 REAL phases (P4, design §2, §3) — the P2 collapse is retired.
+# Round 2 now traverses the exact same ``_PHASE_ALLOWED`` map as round 1.
 # ---------------------------------------------------------------------------
 
 
@@ -143,10 +150,20 @@ def _cycle_at_round_2_generating(repo: InMemoryFamilyRepository) -> uuid.UUID:
     return cycle_id
 
 
-class TestRoundTwoCollapseCompat:
-    def test_round_2_generating_to_complete_direct(self) -> None:
-        """(2, GENERATING) -> (2, COMPLETE) directly — round 2's real
-        intermediate phases are not reachable in P2 (P3 territory)."""
+def _walk_round_2_to_published(repo: InMemoryFamilyRepository, cycle_id: uuid.UUID) -> None:
+    """From (2, GENERATING) walk the full real phase sequence to (2, PUBLISHED)."""
+    advance_phase(repo, cycle_id, CyclePhase.DRAFT_REVIEW)
+    advance_phase(repo, cycle_id, CyclePhase.PRINTED)
+    advance_phase(repo, cycle_id, CyclePhase.ANSWERS_ENTERED)
+    advance_phase(repo, cycle_id, CyclePhase.MARKED)
+    advance_phase(repo, cycle_id, CyclePhase.REVIEW_MARKS)
+    publish_marks(repo, cycle_id, VisibilityDefaults())
+
+
+class TestRoundTwoRealPhases:
+    def test_round_2_generating_walks_full_phase_sequence(self) -> None:
+        """Round 2 traverses DRAFT_REVIEW -> PRINTED -> ... -> PUBLISHED, exactly
+        like round 1 — the P2 collapse ("GENERATING -> COMPLETE direct") is gone."""
         repo = InMemoryFamilyRepository(uuid.uuid4())
         cycle_id = _cycle_at_round_2_generating(repo)
         cycle = repo.get_cycle(cycle_id)
@@ -154,17 +171,54 @@ class TestRoundTwoCollapseCompat:
         assert cycle.round == 2
         assert cycle.phase == CyclePhase.GENERATING
 
-        updated = advance_phase(repo, cycle_id, CyclePhase.COMPLETE)
-        assert updated.state == CycleState.CYCLE_COMPLETE
+        updated = advance_phase(repo, cycle_id, CyclePhase.DRAFT_REVIEW)
         assert updated.round == 2
-        assert updated.phase == CyclePhase.COMPLETE
+        assert updated.phase == CyclePhase.DRAFT_REVIEW
+        # `state` is deprecated + ROUND-AGNOSTIC (design §5): round 2's
+        # DRAFT_REVIEW carries the exact same legacy value as round 1's.
+        assert updated.state == CycleState.PARENT_REVIEWS_DRAFT
 
-    def test_round_2_generating_cannot_go_to_draft_review(self) -> None:
-        """Round 2's DRAFT_REVIEW is not wired yet (P3) — must stay illegal."""
+        updated = advance_phase(repo, cycle_id, CyclePhase.PRINTED)
+        assert updated.state == CycleState.APPROVED_PRINTED
+        assert updated.parent_approval_at is not None
+
+        updated = advance_phase(repo, cycle_id, CyclePhase.ANSWERS_ENTERED)
+        assert updated.state == CycleState.ANSWERS_ENTERED
+
+        updated = advance_phase(repo, cycle_id, CyclePhase.MARKED)
+        assert updated.state == CycleState.AUTO_MARKED
+
+        updated = advance_phase(repo, cycle_id, CyclePhase.REVIEW_MARKS)
+        assert updated.state == CycleState.PARENT_REVIEW_MARKS
+
+        published = publish_marks(repo, cycle_id, VisibilityDefaults())
+        assert published.round == 2
+        assert published.phase == CyclePhase.PUBLISHED
+        assert published.state == CycleState.GAP_REPORT
+
+    def test_round_2_generating_cannot_skip_to_printed(self) -> None:
+        """Round 2 still cannot skip phases — DRAFT_REVIEW must come first."""
         repo = InMemoryFamilyRepository(uuid.uuid4())
         cycle_id = _cycle_at_round_2_generating(repo)
         with pytest.raises(IllegalTransitionError):
-            advance_phase(repo, cycle_id, CyclePhase.DRAFT_REVIEW)
+            advance_phase(repo, cycle_id, CyclePhase.PRINTED)
+
+    def test_round_2_draft_review_records_its_own_approval(self) -> None:
+        """Round 2's DRAFT_REVIEW -> PRINTED gate records a round-2 approval
+        row, distinct from round 1's (golden rule 8, per round)."""
+        repo = InMemoryFamilyRepository(uuid.uuid4())
+        cycle_id = _cycle_at_round_2_generating(repo)
+        advance_phase(repo, cycle_id, CyclePhase.DRAFT_REVIEW)
+        approve_draft(repo, cycle_id, note="round 2 approved")
+
+        approval = repo.get_round_approval(cycle_id, 2)
+        assert approval is not None
+        assert approval.draft_approval_note == "round 2 approved"
+
+        # Round 1's approval row is untouched.
+        round_1_approval = repo.get_round_approval(cycle_id, 1)
+        assert round_1_approval is not None
+        assert round_1_approval.draft_approval_note is None
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +241,9 @@ class TestStartNextRound:
         advance_to_study_pack_done(repo, cycle_id)
 
         updated = start_next_round(repo, cycle_id)
-        assert updated.state == CycleState.GENERATING_B
+        # `state` is deprecated + ROUND-AGNOSTIC (design §5, P4): round 2's
+        # GENERATING carries the exact same legacy value as round 1's.
+        assert updated.state == CycleState.GENERATING_A
         assert updated.round == 2
         assert updated.phase == CyclePhase.GENERATING
 
@@ -203,7 +259,7 @@ class TestStartNextRound:
         publish_marks(repo, cycle_id, VisibilityDefaults())
 
         updated = start_next_round(repo, cycle_id)
-        assert updated.state == CycleState.GENERATING_B
+        assert updated.state == CycleState.GENERATING_A
         assert updated.round == 2
 
     def test_illegal_mid_study_pack_generation(self) -> None:
@@ -333,10 +389,42 @@ class TestLegacyWrapperCompat:
             advance_to_study_pack_done(repo, cycle_id)
 
     def test_cycle_complete_matches_legacy_state(self) -> None:
+        """P4: COMPLETE is reached from round 2's own PUBLISHED phase — round
+        2 no longer collapses straight from GENERATING (design §2, §5 pin)."""
         repo = InMemoryFamilyRepository(uuid.uuid4())
         cycle_id = _cycle_at_round_2_generating(repo)
+        _walk_round_2_to_published(repo, cycle_id)
         updated = advance_to_cycle_complete(repo, cycle_id)
         assert updated.state == CycleState.CYCLE_COMPLETE
+        assert updated.round == 2
+        assert updated.phase == CyclePhase.COMPLETE
+
+    def test_cycle_complete_legal_directly_from_round_1_when_no_retest(self) -> None:
+        """Design §5 pin: COMPLETE is reachable from PUBLISHED/settled STUDY_PACK
+        of THE FINAL round — a single-round cycle (no retest) can complete
+        directly from round 1, without ever starting round 2."""
+        repo = InMemoryFamilyRepository(uuid.uuid4())
+        cycle_id = _new_cycle(repo)
+        advance_to_generating(repo, cycle_id)
+        advance_to_parent_reviews(repo, cycle_id)
+        approve_draft(repo, cycle_id)
+        advance_to_answers_entered(repo, cycle_id)
+        advance_to_auto_marked(repo, cycle_id)
+        advance_to_parent_review_marks(repo, cycle_id)
+        publish_marks(repo, cycle_id, VisibilityDefaults())
+        advance_to_generating_study_pack(repo, cycle_id)
+        advance_to_study_pack_done(repo, cycle_id)
+
+        updated = advance_to_cycle_complete(repo, cycle_id)
+        assert updated.round == 1
+        assert updated.phase == CyclePhase.COMPLETE
+        assert updated.state == CycleState.CYCLE_COMPLETE
+
+    def test_cycle_complete_illegal_from_generating(self) -> None:
+        repo = InMemoryFamilyRepository(uuid.uuid4())
+        cycle_id = _cycle_at_round_2_generating(repo)
+        with pytest.raises(IllegalTransitionError):
+            advance_to_cycle_complete(repo, cycle_id)
 
 
 # ---------------------------------------------------------------------------

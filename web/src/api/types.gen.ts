@@ -3090,7 +3090,12 @@ export type PublishMarksData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/publish';
 };
 

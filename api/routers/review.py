@@ -1,31 +1,36 @@
-"""Phase 3 — parent mark review + publish gate endpoints.
+"""Parent mark review + publish gate endpoints.
+
+Guards are phase-driven and identical for every round (docs/design/
+round-phase-architecture.md §3, §5, §7 P4) — ``variant`` only selects which
+round's marks are targeted.
 
     PATCH /cycles/{cycle_id}/marks/{question_id}
         Parent override of a single question mark, variant-parameterized
         (``?variant=A|B``, default ``A``).
         Sets final_marks, reviewed_at, and overridden_at (when marks differ).
-        Variant A: on first call, transitions AUTO_MARKED → PARENT_REVIEW_MARKS.
-        Variant B: legal only in GENERATING_B; never advances cycle state.
-        Guarded by the target variant's published-immutability (409 if
-        already published — Variant A only in v1).
+        On first call, transitions MARKED → REVIEW_MARKS (every round).
+        Guarded by the target round's published-immutability (409 if
+        already published — per-round, ``cycle_round_approvals``).
         operation_id: review_question_mark
 
     POST /cycles/{cycle_id}/publish
-        Publish marks to the child — the approval-gated transition (golden rule 8).
-        Guard: every question mark must have final_marks set.
+        Publish marks to the child — the approval-gated transition (golden rule 8),
+        variant-parameterized (``?variant=A|B``, default ``A``) — the SAME
+        endpoint publishes any round.
+        Guard: every question mark (for this round) must have final_marks set.
         Computes + freezes published_visibility from child defaults + request overrides.
-        Transitions PARENT_REVIEW_MARKS → GAP_REPORT.
+        Transitions REVIEW_MARKS → PUBLISHED.
         operation_id: publish_marks
 
 Security / invariants:
 - family_id is NEVER accepted from the client — derived from cycle row (RLS-scoped).
 - All state transitions go only through api/services/cycle.py (ARCHITECTURE.md §5).
-- Publish records parent approval + timestamp (golden rule 8).
+- Publish records parent approval + timestamp (golden rule 8), per round.
 - publish_marks freezes the visibility snapshot — a later change to the child's
   defaults MUST NOT alter what was approved.
-- The future child results endpoint MUST filter ai_rationale server-side from
+- The child results endpoint MUST filter ai_rationale server-side from
   published_visibility (esp. exclude it when toggle is False).  This endpoint
-  only stores the snapshot — the child results gate is deferred (Phase 4+).
+  only stores the snapshot — the child results gate is a separate concern.
 """
 
 from __future__ import annotations
@@ -43,7 +48,7 @@ from dependencies import (
     get_submission_repository,
 )
 from routers.families import _resolve_family_id
-from schemas.family import CycleState, VisibilityDefaults
+from schemas.family import CyclePhase, VisibilityDefaults
 from schemas.identity import Identity
 from schemas.review import (
     MarkPatchRequest,
@@ -57,7 +62,7 @@ from services.cycle import IllegalTransitionError
 from services.cycle import (
     publish_marks as cycle_publish_marks,
 )
-from services.phase import PHASE_CONFIG, apply_advance
+from services.phase import PHASE_CONFIG, apply_advance, is_published, round_for_variant
 from services.repositories.base import (
     FamilyRepository,
     QuestionMarkRepository,
@@ -77,7 +82,7 @@ router = APIRouter(prefix="/cycles")
     summary=(
         "Parent override of a single question mark. "
         "Sets final_marks, reviewed_at, and overridden_at. "
-        "On first call, transitions AUTO_MARKED → PARENT_REVIEW_MARKS."
+        "On first call, transitions MARKED → REVIEW_MARKS (every round)."
     ),
 )
 def review_question_mark(
@@ -94,15 +99,14 @@ def review_question_mark(
 
     Guards:
     1. Cycle exists in the caller's family (RLS).
-    2. The target variant's marks are not already published (409).
-    3. Cycle is in the variant's legal review state (PHASE_CONFIG). For
-       Variant A this is AUTO_MARKED or PARENT_REVIEW_MARKS.
+    2. The target round's marks are not already published (409).
+    3. Cycle is at the variant's legal review phase (PHASE_CONFIG) — MARKED
+       or REVIEW_MARKS, identical for every round.
     4. The question mark exists for this cycle's submission + variant.
     5. final_marks (if provided) must be <= marks_total.
 
-    Transition (Variant A only): AUTO_MARKED → PARENT_REVIEW_MARKS on the
-    first PATCH. Already in PARENT_REVIEW_MARKS: no transition needed.
-    Variant B never advances cycle state.
+    Transition: MARKED → REVIEW_MARKS on the first PATCH (every round).
+    Already at REVIEW_MARKS: no transition needed.
     """
     _resolve_family_id(identity, family_repo)
 
@@ -113,21 +117,21 @@ def review_question_mark(
             detail="Cycle not found.",
         )
 
-    config = PHASE_CONFIG[variant]
+    round_ = round_for_variant(variant)
 
-    if config.is_published(cycle):
+    if is_published(family_repo, cycle_id, round_):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Variant {variant} marks are published and immutable.",
         )
 
-    if not config.review.is_legal(cycle.state):
+    if not PHASE_CONFIG.review.is_legal(cycle.phase):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; "
+                f"Cycle is in phase '{cycle.phase.value}'; "
                 f"Variant {variant} mark review requires the cycle to be "
-                f"{config.review.label()}."
+                f"{PHASE_CONFIG.review.label()}."
             ),
         )
 
@@ -159,9 +163,9 @@ def review_question_mark(
 
     now = datetime.now(tz=UTC)
 
-    # Transition (Variant A only, and only from AUTO_MARKED — table-driven).
+    # Transition (identical for every round, and only from MARKED — table-driven).
     try:
-        apply_advance(config.review, family_repo, cycle_id, cycle.state)
+        apply_advance(PHASE_CONFIG.review, family_repo, cycle_id, cycle.phase)
     except IllegalTransitionError as exc:
         log.warning(
             "review_question_mark: state advance failed for cycle %s variant %s: %s",
@@ -189,32 +193,38 @@ def review_question_mark(
         "Publish marks to the child. "
         "Requires all final_marks to be set. "
         "Freezes visibility snapshot. "
-        "Transitions PARENT_REVIEW_MARKS → GAP_REPORT."
+        "Transitions REVIEW_MARKS → PUBLISHED (every round)."
     ),
 )
 def publish_marks_endpoint(
     cycle_id: uuid.UUID,
     body: PublishRequest,
+    variant: Literal["A", "B"] = "A",
     identity: Identity = Depends(get_identity),
     family_repo: FamilyRepository = Depends(get_family_repository),
     marks_repo: QuestionMarkRepository = Depends(get_question_mark_repository),
 ) -> PublishResponse:
     """Publish marks to the child (approval-gated, golden rule 8).
 
+    ``variant`` selects the round to publish (default ``"A"`` == round 1);
+    the SAME endpoint is used for round 2's publish gate (design §5) — the
+    guard below is phase-driven and identical for every round.
+
     Guards:
     1. Cycle exists in the caller's family (RLS).
-    2. Cycle is in PARENT_REVIEW_MARKS.
-    3. Every question mark has final_marks set — 409 with list of unresolved
-       question_ids if not.
+    2. Cycle is at REVIEW_MARKS.
+    3. Every question mark (for this variant/round) has final_marks set —
+       409 with list of unresolved question_ids if not.
 
     On success:
     - Resolves child's visibility_defaults and merges with request overrides.
-    - Freezes the merged result as published_visibility in the cycle row.
-    - Records marks_published_at = now() (parent approval timestamp, golden rule 8).
-    - Transitions PARENT_REVIEW_MARKS → GAP_REPORT via cycle.py.
+    - Freezes the merged result as published_visibility for this round.
+    - Records marks_published_at = now() (parent approval timestamp, golden rule 8),
+      per round, in ``cycle_round_approvals``.
+    - Transitions REVIEW_MARKS → PUBLISHED via cycle.py.
 
     NOTE: This endpoint does NOT build or return the child results view.
-    The future child results endpoint (Phase 4+) MUST:
+    The child results endpoint MUST:
     - Read published_visibility server-side.
     - Exclude ai_rationale from the child response when published_visibility.ai_rationale is False.
     - Never expose correct_answer_rendered or memo fields to the child.
@@ -228,24 +238,22 @@ def publish_marks_endpoint(
             detail="Cycle not found.",
         )
 
-    if cycle.state != CycleState.PARENT_REVIEW_MARKS:
+    if cycle.phase != CyclePhase.REVIEW_MARKS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Cycle is in state '{cycle.state}'; publish requires PARENT_REVIEW_MARKS state."
-            ),
+            detail=(f"Cycle is in phase '{cycle.phase.value}'; publish requires REVIEW_MARKS."),
         )
 
-    # Resolve submission_id for this cycle.
-    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, "A")
+    # Resolve submission_id for this cycle + variant.
+    submission_id = marks_repo.get_submission_id_for_cycle(cycle_id, variant)
     if submission_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No graded submission found for this cycle.",
+            detail=f"No graded Variant-{variant} submission found for this cycle.",
         )
 
     # Guard: every mark must have final_marks set.
-    all_marks = marks_repo.list_for_cycle(cycle_id, "A")
+    all_marks = marks_repo.list_for_cycle(cycle_id, variant)
     unresolved = [m.question_id for m in all_marks if m.final_marks is None]
     if unresolved:
         error = UnresolvedMarksError(

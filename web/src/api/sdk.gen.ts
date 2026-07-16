@@ -248,7 +248,7 @@ export const approveCycleDraft = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Return the memo-free child view of the approved assessment (variant defaults to A; A requires APPROVED_PRINTED, B requires GENERATING_B).
+ * Return the memo-free child view of the approved assessment (variant defaults to A; every round requires PRINTED).
  *
  * Serve the requested variant's assessment to the child in kiosk mode.
  *
@@ -270,22 +270,22 @@ export const getCaptureView = <ThrowOnError extends boolean = false>(options: Op
 });
 
 /**
- * Submit child answers. Variant A advances APPROVED_PRINTED → ANSWERS_ENTERED; Variant B does not advance cycle state.
+ * Submit child answers. Advances PRINTED → ANSWERS_ENTERED (every round).
  *
  * Accept the child's responses and persist the submission.
  *
  * Server-side guards (none of these trust any client flag):
  * 1. Cycle exists in the caller's family (RLS).
- * 2. The target variant's marks are not already published (409) — universal
- * write guard, belt-and-suspenders on top of the state guard.
- * 3. Cycle is in the variant's legal submit state (PHASE_CONFIG).
+ * 2. The target round's marks are not already published (409) — universal
+ * write guard, belt-and-suspenders on top of the phase guard.
+ * 3. Cycle is at the variant's legal submit phase (PHASE_CONFIG).
  * 4. body.child_id matches the cycle → subject → child_id chain.
  * 5. All qids in body.responses belong to the variant's assessment.
  *
  * On success:
  * - Submission is persisted via SubmissionRepository.
- * - Variant A: cycle advances APPROVED_PRINTED → ANSWERS_ENTERED via cycle
- * service. Variant B: no state advance (inferred from data presence).
+ * - Cycle advances PRINTED → ANSWERS_ENTERED via the cycle service
+ * (table-driven, PHASE_CONFIG — identical for every round).
  *
  * Grading is NOT triggered here (Phase 2).
  * proof_photo_paths are stored as-is; NEVER fed to grading (§10).
@@ -336,21 +336,20 @@ export const listQuestionMarks = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Parent override of a single question mark. Sets final_marks, reviewed_at, and overridden_at. On first call, transitions AUTO_MARKED → PARENT_REVIEW_MARKS.
+ * Parent override of a single question mark. Sets final_marks, reviewed_at, and overridden_at. On first call, transitions MARKED → REVIEW_MARKS (every round).
  *
  * Apply a parent review patch to a single question mark.
  *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. The target variant's marks are not already published (409).
- * 3. Cycle is in the variant's legal review state (PHASE_CONFIG). For
- * Variant A this is AUTO_MARKED or PARENT_REVIEW_MARKS.
+ * 2. The target round's marks are not already published (409).
+ * 3. Cycle is at the variant's legal review phase (PHASE_CONFIG) — MARKED
+ * or REVIEW_MARKS, identical for every round.
  * 4. The question mark exists for this cycle's submission + variant.
  * 5. final_marks (if provided) must be <= marks_total.
  *
- * Transition (Variant A only): AUTO_MARKED → PARENT_REVIEW_MARKS on the
- * first PATCH. Already in PARENT_REVIEW_MARKS: no transition needed.
- * Variant B never advances cycle state.
+ * Transition: MARKED → REVIEW_MARKS on the first PATCH (every round).
+ * Already at REVIEW_MARKS: no transition needed.
  */
 export const reviewQuestionMark = <ThrowOnError extends boolean = false>(options: Options<ReviewQuestionMarkData, ThrowOnError>): RequestResult<ReviewQuestionMarkResponses, ReviewQuestionMarkErrors, ThrowOnError> => (options.client ?? client).patch<ReviewQuestionMarkResponses, ReviewQuestionMarkErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -363,24 +362,29 @@ export const reviewQuestionMark = <ThrowOnError extends boolean = false>(options
 });
 
 /**
- * Publish marks to the child. Requires all final_marks to be set. Freezes visibility snapshot. Transitions PARENT_REVIEW_MARKS → GAP_REPORT.
+ * Publish marks to the child. Requires all final_marks to be set. Freezes visibility snapshot. Transitions REVIEW_MARKS → PUBLISHED (every round).
  *
  * Publish marks to the child (approval-gated, golden rule 8).
  *
+ * ``variant`` selects the round to publish (default ``"A"`` == round 1);
+ * the SAME endpoint is used for round 2's publish gate (design §5) — the
+ * guard below is phase-driven and identical for every round.
+ *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Cycle is in PARENT_REVIEW_MARKS.
- * 3. Every question mark has final_marks set — 409 with list of unresolved
- * question_ids if not.
+ * 2. Cycle is at REVIEW_MARKS.
+ * 3. Every question mark (for this variant/round) has final_marks set —
+ * 409 with list of unresolved question_ids if not.
  *
  * On success:
  * - Resolves child's visibility_defaults and merges with request overrides.
- * - Freezes the merged result as published_visibility in the cycle row.
- * - Records marks_published_at = now() (parent approval timestamp, golden rule 8).
- * - Transitions PARENT_REVIEW_MARKS → GAP_REPORT via cycle.py.
+ * - Freezes the merged result as published_visibility for this round.
+ * - Records marks_published_at = now() (parent approval timestamp, golden rule 8),
+ * per round, in ``cycle_round_approvals``.
+ * - Transitions REVIEW_MARKS → PUBLISHED via cycle.py.
  *
  * NOTE: This endpoint does NOT build or return the child results view.
- * The future child results endpoint (Phase 4+) MUST:
+ * The child results endpoint MUST:
  * - Read published_visibility server-side.
  * - Exclude ai_rationale from the child response when published_visibility.ai_rationale is False.
  * - Never expose correct_answer_rendered or memo fields to the child.
@@ -536,16 +540,16 @@ export const getChildResults = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Generate the Variant B retest from the stored Variant A assessment + gap report. Advances STUDY_PACK_DONE -> GENERATING_B.
+ * Start round 2 (retest) and generate its assessment from the stored round-1 assessment + gap report. Advances round 2 to DRAFT_REVIEW, awaiting parent approval (same as round 1).
  *
- * Generate (or return the already-generated) Variant B assessment.
+ * Generate (or return the already-generated) round 2 assessment.
  *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Cycle is STUDY_PACK_DONE, or GENERATING_B with no B assessment yet
- * (retry path) — 409 otherwise.
- * 3. Idempotent: if GENERATING_B and a B assessment already exists, return
- * it without regenerating.
+ * 2. Round 1 is at a settled STUDY_PACK phase, or PUBLISHED (pack skipped)
+ * — 409 otherwise (``start_next_round`` enforces this generically).
+ * 3. Idempotent: if round 2 already has a B assessment (any round-2
+ * phase), return it without regenerating or re-advancing the phase.
  */
 export const generateVariantB = <ThrowOnError extends boolean = false>(options: Options<GenerateVariantBData, ThrowOnError>): RequestResult<GenerateVariantBResponses, GenerateVariantBErrors, ThrowOnError> => (options.client ?? client).post<GenerateVariantBResponses, GenerateVariantBErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -554,7 +558,7 @@ export const generateVariantB = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
- * Derive the A-vs-B gap comparison. Requires Variant B to be fully marked.
+ * Derive the round-1-vs-round-2 gap comparison. Requires round 2 to be fully marked.
  */
 export const getAbComparison = <ThrowOnError extends boolean = false>(options: Options<GetAbComparisonData, ThrowOnError>): RequestResult<GetAbComparisonResponses, GetAbComparisonErrors, ThrowOnError> => (options.client ?? client).get<GetAbComparisonResponses, GetAbComparisonErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -563,7 +567,7 @@ export const getAbComparison = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Terminal transition GENERATING_B -> CYCLE_COMPLETE. Requires Variant B fully marked.
+ * Terminal transition to COMPLETE from round 2's PUBLISHED (or settled STUDY_PACK) phase. Requires round 2 to be fully marked.
  */
 export const completeCycle = <ThrowOnError extends boolean = false>(options: Options<CompleteCycleData, ThrowOnError>): RequestResult<CompleteCycleResponses, CompleteCycleErrors, ThrowOnError> => (options.client ?? client).post<CompleteCycleResponses, CompleteCycleErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],

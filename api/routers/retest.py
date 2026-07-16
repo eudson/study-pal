@@ -1,41 +1,53 @@
-"""Week 6 — Variant B retest generation + A/B comparison endpoints.
+"""Retest (round 2 / "Variant B") generation + cross-round comparison endpoints.
 
-Variant B is SAME-CYCLE (ARCHITECTURE.md §5): the cycle state machine is
-unchanged — ``STUDY_PACK_DONE -> GENERATING_B -> CYCLE_COMPLETE``.
+P4 of the generic (round, phase) redesign (docs/design/round-phase-
+architecture.md §2, §3, §5, §7): round 2 now traverses the exact same real
+phase sequence as round 1 — GENERATING -> DRAFT_REVIEW -> PRINTED ->
+ANSWERS_ENTERED -> MARKED -> REVIEW_MARKS -> PUBLISHED -> (STUDY_PACK) ->
+COMPLETE — including its own parent DRAFT_REVIEW approval (golden rule 8,
+recorded per round in ``cycle_round_approvals``). The old "Variant B's whole
+capture->grade->review sub-loop crammed into a single GENERATING_B state" is
+retired.
 
-The B capture -> submit -> grade -> review sub-flow itself is served by the
-SHARED capture/grade/review endpoints (``routers/capture.py``,
-``routers/grading.py``, ``routers/review.py``) via ``?variant=B`` — see
-``services/phase.py`` for the per-variant state-guard/advance table. This
-router keeps only the genuinely Variant-B-specific endpoints: generation,
-the A-vs-B comparison, and the terminal completion transition.
+The round-2 capture -> submit -> grade -> review -> publish sub-flow is
+served by the SAME shared endpoints round 1 uses (``routers/capture.py``,
+``routers/grading.py``, ``routers/review.py``, including the parent draft
+approval at ``POST /cycles/{id}/approve`` and the publish gate at
+``POST /cycles/{id}/publish``) via ``?variant=B`` — see ``services/phase.py``
+for the phase-guard/advance table, now round-agnostic. This router keeps
+only the genuinely round-specific endpoints: starting round 2 + generating
+its assessment, the cross-round comparison, and the terminal completion
+transition.
 
     POST /cycles/{cycle_id}/variant-b
-        Generate the Variant B assessment from the stored Variant-A assessment
-        + the stored (or in-memory derived) gap report's growing gaps.
-        Guard: STUDY_PACK_DONE (idempotent: returns the existing B assessment
-        if already GENERATING_B and one exists).
-        Advances STUDY_PACK_DONE -> GENERATING_B via cycle.py.
+        Start round 2 (``start_next_round``) and generate its assessment from
+        the stored round-1 assessment + round-1 gap report's growing gaps.
+        Advances the new round to DRAFT_REVIEW (paper generated, awaiting
+        parent approval — NOT skipped past, unlike the old collapsed flow).
+        Guard: round 1 must be at a settled STUDY_PACK phase, or PUBLISHED
+        (pack skipped). Idempotent: if round 2 already has an assessment,
+        returns it without regenerating or re-advancing the phase.
         operation_id: generateVariantB
 
     GET /cycles/{cycle_id}/comparison
-        Derive the A-vs-B comparison (pure, in-memory — never persisted).
-        Guard: GENERATING_B or CYCLE_COMPLETE. Requires Variant B to be fully
-        marked (409 otherwise).
+        Derive the round-1-vs-round-2 comparison (pure, in-memory — never
+        persisted). Guard: round 2 must have been started. Requires round 2
+        to be fully marked (409 otherwise).
         operation_id: getAbComparison
 
     POST /cycles/{cycle_id}/complete
-        Terminal transition GENERATING_B -> CYCLE_COMPLETE. Requires the
-        comparison to be derivable (Variant B fully marked) — 409 otherwise.
+        Terminal transition to COMPLETE from round 2's PUBLISHED (or settled
+        STUDY_PACK) phase. Requires the comparison to be derivable (round 2
+        fully marked) — 409 otherwise.
         operation_id: completeCycle
 
 Security / invariants:
 - family_id is NEVER accepted from the client — derived from the cycle row (RLS).
 - All state transitions go only through api/services/cycle.py (ARCHITECTURE.md §5).
 - Every marks-repo call here hard-targets an explicit variant ("A" or "B") —
-  never inferred by recency (Week 6 guardrail).
-- No new cycle states are introduced; the B capture->mark->review sub-flow is
-  inferred entirely from data presence while state stays GENERATING_B.
+  never inferred by recency (Week 6 guardrail carried over).
+- No control flow branches on ``variant`` here — everything keys on
+  ``cycle.round`` / ``cycle.phase`` (design header hard rule).
 """
 
 from __future__ import annotations
@@ -54,7 +66,7 @@ from dependencies import (
 from routers.families import _resolve_family_id
 from schemas.assessment_schema import Assessment, VariantBRequest
 from schemas.comparison import ABComparison
-from schemas.family import CycleResponse, CycleState
+from schemas.family import CyclePhase, CycleResponse
 from schemas.gap_report import GapReport
 from schemas.identity import Identity
 from services.auth import get_identity
@@ -62,8 +74,9 @@ from services.claude_client import FakeClaude
 from services.comparison import derive_ab_comparison
 from services.cycle import (
     IllegalTransitionError,
+    advance_phase,
     advance_to_cycle_complete,
-    advance_to_generating_b,
+    start_next_round,
 )
 from services.gap_report import build_gap_retargets, derive_gap_report
 from services.generation_service import GenerationService
@@ -91,8 +104,9 @@ router = APIRouter(prefix="/cycles")
     status_code=status.HTTP_201_CREATED,
     operation_id="generateVariantB",
     summary=(
-        "Generate the Variant B retest from the stored Variant A assessment "
-        "+ gap report. Advances STUDY_PACK_DONE -> GENERATING_B."
+        "Start round 2 (retest) and generate its assessment from the stored "
+        "round-1 assessment + gap report. Advances round 2 to DRAFT_REVIEW, "
+        "awaiting parent approval (same as round 1)."
     ),
 )
 def generate_variant_b(
@@ -103,14 +117,14 @@ def generate_variant_b(
     gap_repo: GapReportRepository = Depends(get_gap_report_repository),
     marks_repo: QuestionMarkRepository = Depends(get_question_mark_repository),
 ) -> Assessment:
-    """Generate (or return the already-generated) Variant B assessment.
+    """Generate (or return the already-generated) round 2 assessment.
 
     Guards:
     1. Cycle exists in the caller's family (RLS).
-    2. Cycle is STUDY_PACK_DONE, or GENERATING_B with no B assessment yet
-       (retry path) — 409 otherwise.
-    3. Idempotent: if GENERATING_B and a B assessment already exists, return
-       it without regenerating.
+    2. Round 1 is at a settled STUDY_PACK phase, or PUBLISHED (pack skipped)
+       — 409 otherwise (``start_next_round`` enforces this generically).
+    3. Idempotent: if round 2 already has a B assessment (any round-2
+       phase), return it without regenerating or re-advancing the phase.
     """
     _resolve_family_id(identity, family_repo)
 
@@ -119,14 +133,28 @@ def generate_variant_b(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cycle not found.")
 
     existing_b = resolve_assessment(cycle, "B")
-    if cycle.state == CycleState.GENERATING_B and existing_b is not None:
+    if cycle.round >= 2 and existing_b is not None:
         return existing_b
 
-    if cycle.state not in (CycleState.STUDY_PACK_DONE, CycleState.GENERATING_B):
+    if cycle.round == 1:
+        # Legal only from a settled STUDY_PACK phase or PUBLISHED (pack
+        # skipped) — start_next_round is the single source of truth for
+        # this guard (design §5 pin), shared with the generic round
+        # machinery in services/cycle.py.
+        try:
+            cycle = start_next_round(family_repo, cycle_id)
+        except IllegalTransitionError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    elif not (cycle.round >= 2 and cycle.phase is CyclePhase.GENERATING):
+        # Round 2 exists but has moved past GENERATING with no B assessment
+        # saved — should not occur via normal flow; guard defensively.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; Variant B generation requires STUDY_PACK_DONE."
+                f"Cycle is at round {cycle.round}, phase '{cycle.phase.value}'; "
+                "Variant B generation requires round 1 to be complete "
+                "(settled STUDY_PACK or PUBLISHED), or round 2 to be at "
+                "GENERATING with no assessment yet."
             ),
         )
 
@@ -137,8 +165,9 @@ def generate_variant_b(
             detail="No Variant-A assessment found for this cycle.",
         )
 
-    # Resolve the gap report — stored preferred, derive in-memory otherwise
-    # (no persist, no state transition — mirrors child_results.py's fallback).
+    # Resolve round 1's gap report — stored preferred, derive in-memory
+    # otherwise (no persist, no phase transition — mirrors child_results.py's
+    # fallback).
     gap_row = gap_repo.get_for_cycle(cycle_id)
     if gap_row is not None:
         report: GapReport = gap_row.report
@@ -160,13 +189,6 @@ def generate_variant_b(
     gaps = build_gap_retargets(report)
     request = VariantBRequest(source_assessment=variant_a, gaps=gaps)
 
-    # Advance STUDY_PACK_DONE -> GENERATING_B (skip if already there — retry path).
-    if cycle.state == CycleState.STUDY_PACK_DONE:
-        try:
-            advance_to_generating_b(family_repo, cycle_id)
-        except IllegalTransitionError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
     service = GenerationService(claude=FakeClaude())
     result = service.generate_variant_b(request, assessment_id=str(uuid.uuid4()))
 
@@ -180,6 +202,23 @@ def generate_variant_b(
         )
 
     saved = assessment_repo.save(result.assessment)
+
+    # Advance round 2 GENERATING -> DRAFT_REVIEW: the paper is generated but
+    # NOT yet child-visible — the parent must approve it first, exactly like
+    # round 1 (golden rule 8, design §2 "every round gets DRAFT_REVIEW").
+    # The parent then approves via the SAME shared draft-approval endpoint
+    # round 1 uses (POST /cycles/{id}/approve) -> PRINTED -> capture ...
+    try:
+        advance_phase(family_repo, cycle_id, CyclePhase.DRAFT_REVIEW)
+    except IllegalTransitionError as exc:
+        # Assessment is saved; phase advance failure is non-fatal (e.g. a
+        # concurrent retry already advanced it) — log and continue.
+        log.warning(
+            "generate_variant_b: phase advance to DRAFT_REVIEW failed for cycle %s: %s",
+            cycle_id,
+            exc,
+        )
+
     log.info("generate_variant_b: cycle=%s assessment_id=%s", cycle_id, saved.assessment_id)
     return saved
 
@@ -194,7 +233,7 @@ def generate_variant_b(
     response_model=ABComparison,
     status_code=status.HTTP_200_OK,
     operation_id="getAbComparison",
-    summary="Derive the A-vs-B gap comparison. Requires Variant B to be fully marked.",
+    summary="Derive the round-1-vs-round-2 gap comparison. Requires round 2 to be fully marked.",
 )
 def get_ab_comparison(
     cycle_id: uuid.UUID,
@@ -209,12 +248,12 @@ def get_ab_comparison(
     if cycle is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cycle not found.")
 
-    if cycle.state not in (CycleState.GENERATING_B, CycleState.CYCLE_COMPLETE):
+    if cycle.round < 2:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Cycle is in state '{cycle.state}'; "
-                "comparison requires GENERATING_B or CYCLE_COMPLETE."
+                f"Cycle is at round {cycle.round}; comparison requires round 2 "
+                "(Variant B) to have been started."
             ),
         )
 
@@ -234,7 +273,10 @@ def get_ab_comparison(
     response_model=CycleResponse,
     status_code=status.HTTP_200_OK,
     operation_id="completeCycle",
-    summary="Terminal transition GENERATING_B -> CYCLE_COMPLETE. Requires Variant B fully marked.",
+    summary=(
+        "Terminal transition to COMPLETE from round 2's PUBLISHED (or settled STUDY_PACK) "
+        "phase. Requires round 2 to be fully marked."
+    ),
 )
 def complete_cycle(
     cycle_id: uuid.UUID,
@@ -249,13 +291,13 @@ def complete_cycle(
     if cycle is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cycle not found.")
 
-    if cycle.state != CycleState.GENERATING_B:
+    if cycle.round < 2:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cycle is in state '{cycle.state}'; complete requires GENERATING_B.",
+            detail=f"Cycle is at round {cycle.round}; complete requires round 2 to be finished.",
         )
 
-    # Require the comparison to be derivable — i.e. Variant B fully marked.
+    # Require the comparison to be derivable — i.e. round 2 (Variant B) fully marked.
     _resolve_gap_report(cycle, "A", gap_repo, marks_repo)
     _resolve_gap_report(cycle, "B", gap_repo, marks_repo, require_full=True)
 
