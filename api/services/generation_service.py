@@ -19,6 +19,8 @@ import json
 import logging
 import re
 import uuid
+from dataclasses import dataclass
+from typing import Protocol
 
 from config import Settings, get_settings
 from schemas.assessment_schema import Assessment, VariantBRequest
@@ -68,6 +70,75 @@ def _build_variant_b_prompt(request: VariantBRequest) -> str:
     )
     prompt = prompt.replace("{{NOTE}}", request.note)
     return prompt
+
+
+class RoundInputStrategy(Protocol):
+    """The per-round input to generation (P3 — see round-phase-architecture.md §5, §7).
+
+    ``generate`` (round 1, from ``scope_text``) and ``generate_variant_b``
+    (round >=2, from ``source_assessment`` + ``gaps`` + ``note``) share
+    identical control flow (one Claude call -> validate -> one repair retry
+    -> structured error -> id/cycle_id/variant stamping). This protocol
+    captures the only four things that differ between rounds:
+    ``build_prompt`` (template + variable bindings), ``variant`` (the
+    stamped label), ``cycle_id`` (its source), and ``error_message``. No
+    other control flow may branch on round/variant — see the hard rule in
+    round-phase-architecture.md.
+    """
+
+    @property
+    def variant(self) -> str: ...
+
+    @property
+    def error_message(self) -> str: ...
+
+    @property
+    def cycle_id(self) -> str: ...
+
+    def build_prompt(self, settings: Settings) -> str: ...
+
+
+@dataclass(frozen=True)
+class ScopeStrategy:
+    """Round 1 (diagnostic): binds ``scope_text`` (length-capped, invariant 7)."""
+
+    request: GenerateAssessmentRequest
+    variant: str = "A"
+    error_message: str = (
+        "Assessment generation failed schema validation after "
+        "one repair attempt. See issues for details."
+    )
+
+    def build_prompt(self, settings: Settings) -> str:
+        scope = self.request.scope_text[: settings.max_scope_chars]
+        return _build_prompt(scope, settings.max_questions)
+
+    @property
+    def cycle_id(self) -> str:
+        return self.request.cycle_id
+
+
+@dataclass(frozen=True)
+class RetargetStrategy:
+    """Round >=2 (retest): binds ``source_assessment`` + ``gaps`` + ``note``.
+
+    ``cycle_id`` is taken from the source assessment — Variant B is
+    same-cycle (ARCHITECTURE.md §5).
+    """
+
+    request: VariantBRequest
+    variant: str = "B"
+    error_message: str = (
+        "Variant B generation failed schema validation after "
+        "one repair attempt. See issues for details."
+    )
+
+    def build_prompt(self, settings: Settings) -> str:
+        return _build_variant_b_prompt(self.request)
+
+    @property
+    def cycle_id(self) -> str:
+        return self.request.source_assessment.cycle_id
 
 
 def _extract_json(raw: str) -> dict[str, object]:
@@ -127,49 +198,14 @@ class GenerationService:
         *,
         assessment_id: str | None = None,
     ) -> GenerateAssessmentResponse:
-        """Generate and validate an assessment; return structured result.
+        """Generate and validate a round-1 (diagnostic) assessment.
 
-        ``assessment_id`` is always assigned by this service; any value the
-        model returns is overwritten (invariant 6).
+        Thin wrapper: constructs a :class:`ScopeStrategy` and delegates to the
+        shared :meth:`_generate` core. ``assessment_id`` is always assigned by
+        this service; any value the model returns is overwritten (invariant 6).
         """
-        settings = self._settings
         assigned_id = assessment_id or str(uuid.uuid4())
-
-        # Invariant 7: cap scope text length.
-        scope = request.scope_text[: settings.max_scope_chars]
-
-        prompt = _build_prompt(scope, settings.max_questions)
-
-        # --- First call ---
-        raw_str, log1 = self._claude.complete(prompt, attempt=1)
-        _log_call(log1)
-
-        result, raw_doc = self._try_validate(raw_str, assigned_id, request.cycle_id, settings)
-
-        if result.valid and raw_doc is not None:
-            assessment = Assessment.model_validate(raw_doc)
-            return GenerateAssessmentResponse(ok=True, assessment=assessment)
-
-        # --- Repair retry (hard cap: exactly one) ---
-        repair_prompt = self._build_repair_prompt(prompt, raw_str, result)
-        raw_str2, log2 = self._claude.complete(repair_prompt, attempt=2)
-        _log_call(log2)
-
-        result2, raw_doc2 = self._try_validate(raw_str2, assigned_id, request.cycle_id, settings)
-
-        if result2.valid and raw_doc2 is not None:
-            assessment = Assessment.model_validate(raw_doc2)
-            return GenerateAssessmentResponse(ok=True, assessment=assessment)
-
-        # --- Structured error after two failures ---
-        return GenerateAssessmentResponse(
-            ok=False,
-            issues=result2.issues,
-            error=(
-                "Assessment generation failed schema validation after "
-                "one repair attempt. See issues for details."
-            ),
-        )
+        return self._generate(ScopeStrategy(request=request), assigned_id)
 
     def generate_variant_b(
         self,
@@ -177,25 +213,42 @@ class GenerationService:
         *,
         assessment_id: str | None = None,
     ) -> GenerateAssessmentResponse:
-        """Generate and validate a Variant-B retest; return structured result.
+        """Generate and validate a Variant-B (round >=2) retest.
 
-        Mirrors ``generate()`` exactly (one Claude call, validate, one repair
-        retry, structured error) but targets the Variant-B prompt and hard-sets
-        ``variant="B"`` on the output (invariant 6 extension — the model must
-        not decide the variant either).  ``cycle_id`` is taken from the source
-        assessment (Variant B is same-cycle, ARCHITECTURE.md §5).
+        Thin wrapper: constructs a :class:`RetargetStrategy` and delegates to
+        the shared :meth:`_generate` core. Hard-sets ``variant="B"`` on the
+        output (invariant 6 extension — the model must not decide the variant
+        either); ``cycle_id`` is taken from the source assessment (Variant B
+        is same-cycle, ARCHITECTURE.md §5).
+        """
+        assigned_id = assessment_id or str(uuid.uuid4())
+        return self._generate(RetargetStrategy(request=request), assigned_id)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _generate(
+        self,
+        strategy: RoundInputStrategy,
+        assessment_id: str,
+    ) -> GenerateAssessmentResponse:
+        """Shared generation core (P3): one Claude call, validate, one repair
+        retry (hard cap), structured error on failure. The only per-round
+        differences are captured by ``strategy`` (prompt, variant, cycle_id,
+        error message) — see :class:`RoundInputStrategy`.
         """
         settings = self._settings
-        assigned_id = assessment_id or str(uuid.uuid4())
-        cycle_id = request.source_assessment.cycle_id
-
-        prompt = _build_variant_b_prompt(request)
+        prompt = strategy.build_prompt(settings)
+        cycle_id = strategy.cycle_id
 
         # --- First call ---
         raw_str, log1 = self._claude.complete(prompt, attempt=1)
         _log_call(log1)
 
-        result, raw_doc = self._try_validate(raw_str, assigned_id, cycle_id, settings, variant="B")
+        result, raw_doc = self._try_validate(
+            raw_str, assessment_id, cycle_id, settings, variant=strategy.variant
+        )
 
         if result.valid and raw_doc is not None:
             assessment = Assessment.model_validate(raw_doc)
@@ -207,7 +260,7 @@ class GenerationService:
         _log_call(log2)
 
         result2, raw_doc2 = self._try_validate(
-            raw_str2, assigned_id, cycle_id, settings, variant="B"
+            raw_str2, assessment_id, cycle_id, settings, variant=strategy.variant
         )
 
         if result2.valid and raw_doc2 is not None:
@@ -218,15 +271,8 @@ class GenerationService:
         return GenerateAssessmentResponse(
             ok=False,
             issues=result2.issues,
-            error=(
-                "Variant B generation failed schema validation after "
-                "one repair attempt. See issues for details."
-            ),
+            error=strategy.error_message,
         )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _try_validate(
         self,
