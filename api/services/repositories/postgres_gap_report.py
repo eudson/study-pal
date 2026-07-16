@@ -37,18 +37,17 @@ class PostgresGapReportRepository:
         cycle_id: uuid.UUID,
         submission_id: uuid.UUID,
         report: GapReport,
+        round: int = 1,  # noqa: A002
     ) -> GapReportRow:
-        """Insert or overwrite the gap report for a cycle.
+        """Insert or overwrite the gap report for a cycle + round.
 
         Uses ON CONFLICT (cycle_id, round) DO UPDATE so re-generation is
         idempotent (design docs/design/round-phase-architecture.md §4.3). The
         row id is preserved on re-runs (via EXCLUDED is ignored in favour of
         the existing primary key on conflict, but created_at is refreshed).
 
-        P1: no caller threads a round through this Protocol method yet — the
-        only existing call sites are the round-1 (Variant A) path, so round
-        is hardcoded to 1 here (design §7 P1 scope; round-aware callers land
-        in P4).
+        ``round`` defaults to 1 (round 1 / Variant A, unchanged behaviour);
+        round-aware callers (P4) pass it explicitly.
         """
         report_json = report.model_dump_json()
 
@@ -58,19 +57,20 @@ class PostgresGapReportRepository:
             INSERT INTO gap_reports (
                 family_id, cycle_id, submission_id, report, round
             ) VALUES (
-                %(family_id)s, %(cycle_id)s, %(submission_id)s, %(report)s::jsonb, 1
+                %(family_id)s, %(cycle_id)s, %(submission_id)s, %(report)s::jsonb, %(round)s
             )
             ON CONFLICT (cycle_id, round) DO UPDATE SET
                 submission_id = EXCLUDED.submission_id,
                 report        = EXCLUDED.report,
                 created_at    = now()
-            RETURNING id, family_id, cycle_id, submission_id, report, created_at
+            RETURNING id, family_id, cycle_id, submission_id, report, created_at, round
             """,
             {
                 "family_id": str(family_id),
                 "cycle_id": str(cycle_id),
                 "submission_id": str(submission_id),
                 "report": report_json,
+                "round": round,
             },
         )
         row = cur.fetchone()
@@ -78,21 +78,20 @@ class PostgresGapReportRepository:
         self._conn.commit()
         return _row_to_gap_report_row(row)
 
-    def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
-        """Return the round-1 gap report row for a cycle, or None if not yet generated.
+    def get_for_cycle(self, cycle_id: uuid.UUID, round: int = 1) -> GapReportRow | None:  # noqa: A002
+        """Return the gap report row for a cycle + round, or None if not yet generated.
 
-        P1: this Protocol method is not yet round-parameterized (design §7 P1
-        scope — round-aware callers land in P4), so it is pinned to round=1,
-        matching the only round upsert() currently writes.
+        ``round`` defaults to 1 (round 1 / Variant A, unchanged behaviour);
+        round-aware callers (P4) pass it explicitly.
         """
         cur = self._conn.cursor()
         cur.execute(
             """
-            SELECT id, family_id, cycle_id, submission_id, report, created_at
+            SELECT id, family_id, cycle_id, submission_id, report, created_at, round
             FROM gap_reports
-            WHERE cycle_id = %s AND round = 1
+            WHERE cycle_id = %s AND round = %s
             """,
-            (str(cycle_id),),
+            (str(cycle_id), round),
         )
         row = cur.fetchone()
         if row is None:
@@ -123,4 +122,5 @@ def _row_to_gap_report_row(row: dict[str, Any]) -> GapReportRow:
         submission_id=uuid.UUID(str(row["submission_id"])),
         report=report,
         created_at=_to_dt(row["created_at"]),
+        round=int(row["round"]),
     )

@@ -279,7 +279,10 @@ class GapReportRepository(Protocol):
     """Persistence for derived gap reports.
 
     family_id is NEVER accepted from the client — resolved server-side via RLS.
-    One gap report per cycle (UNIQUE(cycle_id)); upsert on regenerate.
+    One gap report per (cycle_id, round) (UNIQUE(cycle_id, round), design
+    docs/design/round-phase-architecture.md §4.3); upsert on regenerate.
+    ``round`` defaults to 1 so every P1-P3 call site (round 1 / Variant A
+    only) keeps working unchanged (P4 threads it explicitly for round 2+).
     """
 
     def upsert(
@@ -288,16 +291,17 @@ class GapReportRepository(Protocol):
         cycle_id: uuid.UUID,
         submission_id: uuid.UUID,
         report: GapReport,
+        round: int = 1,  # noqa: A002
     ) -> GapReportRow:
-        """Upsert the gap report for a cycle.
+        """Upsert the gap report for a cycle + round.
 
-        Idempotent: re-running derive + upsert overwrites the previous row.
-        Returns the persisted GapReportRow.
+        Idempotent: re-running derive + upsert overwrites the previous row
+        for that (cycle_id, round). Returns the persisted GapReportRow.
         """
         ...
 
-    def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
-        """Return the gap report row for a cycle, or None if not yet generated."""
+    def get_for_cycle(self, cycle_id: uuid.UUID, round: int = 1) -> GapReportRow | None:  # noqa: A002
+        """Return the gap report row for a cycle + round, or None if not yet generated."""
         ...
 
 
@@ -306,7 +310,10 @@ class StudyPackRepository(Protocol):
     """Persistence for generated study packs.
 
     family_id is NEVER accepted from the client — resolved server-side via RLS.
-    One study pack per cycle (UNIQUE(cycle_id)); upsert on regenerate.
+    One study pack per (cycle_id, round) (UNIQUE(cycle_id, round), design
+    docs/design/round-phase-architecture.md §4.4); upsert on regenerate.
+    ``round`` defaults to 1 so every P1-P3 call site (round 1 / Variant A
+    only) keeps working unchanged (P4 threads it explicitly for round 2+).
     """
 
     def upsert(
@@ -314,25 +321,27 @@ class StudyPackRepository(Protocol):
         family_id: uuid.UUID,
         cycle_id: uuid.UUID,
         pack: StudyPack,
+        round: int = 1,  # noqa: A002
     ) -> StudyPackRow:
-        """Upsert the study pack for a cycle.
+        """Upsert the study pack for a cycle + round.
 
-        Idempotent: re-running generate + upsert overwrites the previous row.
-        Returns the persisted StudyPackRow.
+        Idempotent: re-running generate + upsert overwrites the previous row
+        for that (cycle_id, round). Returns the persisted StudyPackRow.
         """
         ...
 
-    def get_for_cycle(self, cycle_id: uuid.UUID) -> StudyPackRow | None:
-        """Return the study pack row for a cycle, or None if not yet generated."""
+    def get_for_cycle(self, cycle_id: uuid.UUID, round: int = 1) -> StudyPackRow | None:  # noqa: A002
+        """Return the study pack row for a cycle + round, or None if not yet generated."""
         ...
 
     def set_approved_at(
         self,
         cycle_id: uuid.UUID,
         approved_at: datetime,
+        round: int = 1,  # noqa: A002
     ) -> StudyPackRow:
-        """Record parent approval: set approved_at on the study pack row.
+        """Record parent approval: set approved_at on the study pack row for this round.
 
-        Raises ValueError if no study pack row exists for this cycle.
+        Raises ValueError if no study pack row exists for this (cycle_id, round).
         """
         ...

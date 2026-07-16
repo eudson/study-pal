@@ -407,12 +407,14 @@ class InMemoryGapReportRepository:
     """Process-local gap report store for unit tests (no Postgres required).
 
     Satisfies the GapReportRepository Protocol.
-    Keyed by cycle_id (UNIQUE constraint mirrors the DB table).
+    Keyed by (cycle_id, round) (UNIQUE constraint mirrors the DB table,
+    design docs/design/round-phase-architecture.md §4.3) — round defaults to
+    1 so pre-P4 callers/tests keep working unchanged.
     """
 
     def __init__(self) -> None:
-        # cycle_id → GapReportRow
-        self._store: dict[uuid.UUID, GapReportRow] = {}
+        # (cycle_id, round) → GapReportRow
+        self._store: dict[tuple[uuid.UUID, int], GapReportRow] = {}
 
     def upsert(
         self,
@@ -420,10 +422,12 @@ class InMemoryGapReportRepository:
         cycle_id: uuid.UUID,
         submission_id: uuid.UUID,
         report: GapReport,
+        round: int = 1,  # noqa: A002
     ) -> GapReportRow:
-        """Upsert: insert or overwrite the gap report for this cycle."""
+        """Upsert: insert or overwrite the gap report for this (cycle, round)."""
+        key = (cycle_id, round)
         # Preserve the existing row id on re-runs for stable audit trails.
-        existing = self._store.get(cycle_id)
+        existing = self._store.get(key)
         row_id = existing.id if existing is not None else uuid.uuid4()
         now = _now()
         row = GapReportRow(
@@ -433,33 +437,38 @@ class InMemoryGapReportRepository:
             submission_id=submission_id,
             report=report,
             created_at=now,
+            round=round,
         )
-        self._store[cycle_id] = row
+        self._store[key] = row
         return row
 
-    def get_for_cycle(self, cycle_id: uuid.UUID) -> GapReportRow | None:
-        return self._store.get(cycle_id)
+    def get_for_cycle(self, cycle_id: uuid.UUID, round: int = 1) -> GapReportRow | None:  # noqa: A002
+        return self._store.get((cycle_id, round))
 
 
 class InMemoryStudyPackRepository:
     """Process-local study pack store for unit tests (no Postgres required).
 
     Satisfies the StudyPackRepository Protocol.
-    Keyed by cycle_id (UNIQUE constraint mirrors the DB table).
+    Keyed by (cycle_id, round) (UNIQUE constraint mirrors the DB table,
+    design docs/design/round-phase-architecture.md §4.4) — round defaults to
+    1 so pre-P4 callers/tests keep working unchanged.
     """
 
     def __init__(self) -> None:
-        # cycle_id → StudyPackRow
-        self._store: dict[uuid.UUID, StudyPackRow] = {}
+        # (cycle_id, round) → StudyPackRow
+        self._store: dict[tuple[uuid.UUID, int], StudyPackRow] = {}
 
     def upsert(
         self,
         family_id: uuid.UUID,
         cycle_id: uuid.UUID,
         pack: StudyPack,
+        round: int = 1,  # noqa: A002
     ) -> StudyPackRow:
-        """Upsert: insert or overwrite the study pack for this cycle."""
-        existing = self._store.get(cycle_id)
+        """Upsert: insert or overwrite the study pack for this (cycle, round)."""
+        key = (cycle_id, round)
+        existing = self._store.get(key)
         row_id = existing.id if existing is not None else uuid.uuid4()
         # Preserve approved_at on re-run so approval is not silently cleared.
         approved_at = existing.approved_at if existing is not None else None
@@ -471,22 +480,27 @@ class InMemoryStudyPackRepository:
             pack=pack,
             approved_at=approved_at,
             created_at=now,
+            round=round,
         )
-        self._store[cycle_id] = row
+        self._store[key] = row
         return row
 
-    def get_for_cycle(self, cycle_id: uuid.UUID) -> StudyPackRow | None:
-        return self._store.get(cycle_id)
+    def get_for_cycle(self, cycle_id: uuid.UUID, round: int = 1) -> StudyPackRow | None:  # noqa: A002
+        return self._store.get((cycle_id, round))
 
     def set_approved_at(
         self,
         cycle_id: uuid.UUID,
         approved_at: datetime,
+        round: int = 1,  # noqa: A002
     ) -> StudyPackRow:
-        """Record parent approval timestamp on the study pack row."""
-        existing = self._store.get(cycle_id)
+        """Record parent approval timestamp on the study pack row for this round."""
+        key = (cycle_id, round)
+        existing = self._store.get(key)
         if existing is None:
-            raise ValueError(f"No study pack found for cycle {cycle_id} — generate one first.")
+            raise ValueError(
+                f"No study pack found for cycle {cycle_id} round {round} — generate one first."
+            )
         updated = existing.model_copy(update={"approved_at": approved_at})
-        self._store[cycle_id] = updated
+        self._store[key] = updated
         return updated

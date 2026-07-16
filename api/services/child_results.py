@@ -31,6 +31,7 @@ def project_results_for_child(
     marks: list[QuestionMark],
     responses: list[ChildResponseItem],
     snapshot: VisibilityDefaults,
+    variant: str = "A",
 ) -> ChildResultsView:
     """Build the child-visible results view from published data.
 
@@ -44,9 +45,13 @@ def project_results_for_child(
                    retrieve ``ai_rationale`` per question_id.
         responses: The child's submitted ChildResponseItem list — used to call
                    ``render_child_answer`` (memo-free).
-        snapshot:  The FROZEN ``published_visibility`` from the cycle's publish
-                   row.  Gating from the child's current ``visibility_defaults``
-                   MUST NOT be used here — the snapshot is the contract.
+        snapshot:  The FROZEN ``published_visibility`` from the round's approval
+                   row (``cycle_round_approvals``).  Gating from the child's
+                   current ``visibility_defaults`` MUST NOT be used here — the
+                   snapshot is the contract.
+        variant:   Which round's assessment to pull the title from (default
+                   ``"A"`` == round 1) — a data-selection parameter, not a
+                   control-flow branch.
 
     Returns:
         A ``ChildResultsView`` containing no memo, correct-answer, or
@@ -165,12 +170,13 @@ def project_results_for_child(
         "router must validate this before calling."
     )
 
-    # title: use the Variant A assessment title if available, else fall back to cycle id.
+    # title: use the target variant's assessment title if available, else fall
+    # back to cycle id.
     title: str = str(cycle.id)
     if cycle.assessments:
-        variant_a = next((a for a in cycle.assessments if a.variant == "A"), None)
-        if variant_a is not None:
-            title = variant_a.title
+        target_assessment = next((a for a in cycle.assessments if a.variant == variant), None)
+        if target_assessment is not None:
+            title = target_assessment.title
 
     return ChildResultsView(
         cycle_id=cycle.id,

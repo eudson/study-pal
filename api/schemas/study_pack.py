@@ -156,6 +156,14 @@ class StudyPackRow(BaseModel):
         ),
     )
     created_at: datetime
+    round: int = Field(
+        default=1,
+        description=(
+            "Which round this pack belongs to (P4 of the round/phase redesign, "
+            "docs/design/round-phase-architecture.md §4/§7). Defaults to 1 so "
+            "pre-P4 callers/tests that never threaded a round are unaffected."
+        ),
+    )
 
 
 class StudyPackResponse(BaseModel):
@@ -167,3 +175,4 @@ class StudyPackResponse(BaseModel):
         default=None,
         description="Null until the parent approves; set by POST .../study-pack/approve.",
     )
+    round: int = 1

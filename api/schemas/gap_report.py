@@ -136,6 +136,10 @@ class GapReportRow(BaseModel):
     """Database row shape for the gap_reports table.
 
     ``report`` is the full GapReport document stored as JSONB.
+    ``round`` identifies which round this report belongs to (P4 of the
+    round/phase redesign, docs/design/round-phase-architecture.md §4/§7);
+    defaults to 1 so pre-P4 callers/tests that never threaded a round
+    continue to construct rows unchanged.
     """
 
     id: uuid.UUID
@@ -144,6 +148,7 @@ class GapReportRow(BaseModel):
     submission_id: uuid.UUID
     report: GapReport
     created_at: datetime
+    round: int = 1
 
 
 class GapReportResponse(BaseModel):
@@ -152,3 +157,4 @@ class GapReportResponse(BaseModel):
     cycle_id: uuid.UUID
     submission_id: uuid.UUID
     report: GapReport
+    round: int = 1

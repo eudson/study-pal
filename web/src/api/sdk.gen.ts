@@ -400,13 +400,13 @@ export const publishMarks = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * Return the stored gap report for a cycle. 404 if not yet generated.
+ * Return the stored gap report for a cycle + variant/round (default A / round 1). 404 if not yet generated.
  *
- * Return the persisted gap report.
+ * Return the persisted gap report for a cycle + round.
  *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Gap report row exists — 404 if not yet generated.
+ * 2. Gap report row exists for this round — 404 if not yet generated.
  */
 export const getGapReport = <ThrowOnError extends boolean = false>(options: Options<GetGapReportData, ThrowOnError>): RequestResult<GetGapReportResponses, GetGapReportErrors, ThrowOnError> => (options.client ?? client).get<GetGapReportResponses, GetGapReportErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -415,15 +415,15 @@ export const getGapReport = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * Derive the gap report from reviewed marks and upsert to storage. Idempotent. Cycle must be in GAP_REPORT or a later state.
+ * Derive the gap report from reviewed marks and upsert to storage, for the given variant/round (default A / round 1). Idempotent. The target round's marks must already be published.
  *
- * Derive and persist the gap report for a cycle.
+ * Derive and persist the gap report for a cycle + round.
  *
  * Guards:
  * 1. Cycle exists in the caller's family (RLS).
- * 2. Cycle is in GAP_REPORT or a later state (marks published).
- * 3. The cycle has a Variant-A assessment.
- * 4. The cycle has at least one graded mark.
+ * 2. The target round's marks are published (per-round, ``cycle_round_approvals``).
+ * 3. The cycle has an assessment for this variant/round.
+ * 4. The cycle has at least one graded mark for this variant/round.
  *
  * Derivation is deterministic — no Claude call.
  * final_marks is guaranteed set by the publish gate; any None value causes a
@@ -436,14 +436,14 @@ export const generateGapReport = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Return the stored study pack for a cycle. 404 if not yet generated.
+ * Return the stored study pack for a cycle + variant/round (default A / round 1). 404 if not yet generated.
  *
- * Return the persisted study pack.
+ * Return the persisted study pack for a cycle + round.
  *
  * Guards:
  * 1. User has a family (RLS).
  * 2. Cycle exists and belongs to caller's family.
- * 3. Study pack row exists — 404 if not yet generated.
+ * 3. Study pack row exists for this round — 404 if not yet generated.
  */
 export const getStudyPack = <ThrowOnError extends boolean = false>(options: Options<GetStudyPackData, ThrowOnError>): RequestResult<GetStudyPackResponses, GetStudyPackErrors, ThrowOnError> => (options.client ?? client).get<GetStudyPackResponses, GetStudyPackErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -452,23 +452,23 @@ export const getStudyPack = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * Generate (or re-generate) the study pack from the gap report. Idempotent. Cycle must be in GAP_REPORT or a later state.
+ * Generate (or re-generate) the study pack from the gap report, for the given variant/round (default A / round 1). Idempotent. The target round's marks must already be published.
  *
- * Generate and persist the study pack for a cycle.
+ * Generate and persist the study pack for a cycle + round.
  *
  * Guards (in order):
  * 1. User has a family (RLS).
  * 2. Cycle exists and belongs to caller's family (RLS).
- * 3. Cycle is in GAP_REPORT or a later state.
- * 4. The cycle has a Variant-A assessment (for gap derivation fallback).
- * 5. The cycle has at least one graded mark (for gap derivation fallback).
+ * 3. The target round's marks are published (per-round, ``cycle_round_approvals``).
+ * 4. The cycle has an assessment for this variant/round.
+ * 5. A stored gap report exists for this round (generate it first if not).
  *
- * Idempotent: if the cycle is already in STUDY_PACK_DONE or later, the
- * transition calls are skipped and only the pack upsert runs.
+ * Idempotent: if the pack already exists, this just re-generates and upserts it.
  *
- * The gap report is read from the gap_repo if already stored; if not, it
- * is re-derived in memory from the assessment + marks (fallback).  The
- * primary path is to read the stored gap report.
+ * Phase transitions (``PUBLISHED → STUDY_PACK`` generating/done) are only
+ * attempted when the requested round is the cycle's CURRENT round — a
+ * request for an earlier, already-settled round only re-derives + upserts
+ * the pack, without touching the cycle's (unrelated, later) current phase.
  */
 export const generateStudyPack = <ThrowOnError extends boolean = false>(options: Options<GenerateStudyPackData, ThrowOnError>): RequestResult<GenerateStudyPackResponses, GenerateStudyPackErrors, ThrowOnError> => (options.client ?? client).post<GenerateStudyPackResponses, GenerateStudyPackErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
@@ -477,9 +477,9 @@ export const generateStudyPack = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Record parent approval for the study pack (golden rule 8 gate). Sets approved_at; study pack is visible to child only after this call.
+ * Record parent approval for the study pack (golden rule 8 gate), for the given variant/round (default A / round 1). Sets approved_at; study pack is visible to child only after this call.
  *
- * Record parent approval timestamp on the study pack.
+ * Record parent approval timestamp on the study pack for a round.
  *
  * This is the golden-rule-8 gate: the study pack is exposed to the child
  * only after the parent explicitly calls this endpoint.  The approval
@@ -488,7 +488,7 @@ export const generateStudyPack = <ThrowOnError extends boolean = false>(options:
  * Guards:
  * 1. User has a family (RLS).
  * 2. Cycle exists and belongs to caller's family.
- * 3. Study pack must exist (generate first — 404 if not).
+ * 3. Study pack must exist for this round (generate first — 404 if not).
  *
  * Idempotent: calling approve more than once updates the timestamp to now().
  */
@@ -499,14 +499,14 @@ export const approveStudyPack = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
- * Render the study pack to PDF (WeasyPrint). Returns application/pdf.
+ * Render the study pack to PDF (WeasyPrint) for the variant/round (default A / round 1). Returns application/pdf.
  *
  * Render the study pack to PDF and return as a streaming response.
  *
  * Guards:
  * 1. User has a family (RLS).
  * 2. Cycle exists and belongs to caller's family.
- * 3. Study pack must exist (generate first — 404 if not).
+ * 3. Study pack must exist for this round (generate first — 404 if not).
  *
  * The PDF is rendered on every request (no caching) — consistent with the
  * assessment PDF pattern.  Content language from the assessment is used when
@@ -519,19 +519,22 @@ export const getStudyPackPdf = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Return the child-visible published results for a cycle, server-side filtered through the frozen published_visibility snapshot. Cycle must be in GAP_REPORT or a later state.
+ * Return the child-visible published results for a cycle + variant/round (default A / round 1), server-side filtered through the frozen per-round published_visibility snapshot. The target round's marks must be published, and the round must be child-visible.
  *
- * Return the child-visible published results.
+ * Return the child-visible published results for a cycle + round.
  *
  * Guards (in order):
  * 1. Caller has a family (RLS — cross-family cycles are invisible → 404).
  * 2. Cycle exists in the caller's family; None → 404.
- * 3. Cycle is in GAP_REPORT or a later state → 409 if not.
- * 4. ``published_visibility`` snapshot exists on the cycle → 409/500 if absent.
- * 5. Resolve marks + submission responses.  Gap report: use the stored row
+ * 3. The target round's marks are published → 409 if not.
+ * 4. The target round is child-visible (``round_config(round).results_child_visible``)
+ * → 404 if not (round 2's results are parent-only in v1).
+ * 5. The round's ``published_visibility`` snapshot exists (``cycle_round_approvals``)
+ * → 500 if absent (server invariant — publish always freezes it).
+ * 6. Resolve marks + submission responses.  Gap report: use the stored row
  * when present; derive in-memory otherwise (no persist, no Claude, no
  * state transition).
- * 6. Project through the frozen snapshot via ``project_results_for_child``.
+ * 7. Project through the frozen snapshot via ``project_results_for_child``.
  */
 export const getChildResults = <ThrowOnError extends boolean = false>(options: Options<GetChildResultsData, ThrowOnError>): RequestResult<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError> => (options.client ?? client).get<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],

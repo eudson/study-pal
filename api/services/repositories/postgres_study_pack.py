@@ -37,17 +37,16 @@ class PostgresStudyPackRepository:
         family_id: uuid.UUID,
         cycle_id: uuid.UUID,
         pack: StudyPack,
+        round: int = 1,  # noqa: A002
     ) -> StudyPackRow:
-        """Insert or overwrite the study pack for a cycle.
+        """Insert or overwrite the study pack for a cycle + round.
 
         Uses ON CONFLICT (cycle_id, round) DO UPDATE so re-generation is
         idempotent (design docs/design/round-phase-architecture.md §4.4).
         ``approved_at`` is NOT overwritten on conflict — approval survives regeneration.
 
-        P1: no caller threads a round through this Protocol method yet — the
-        only existing call sites are the round-1 (Variant A) path, so round
-        is hardcoded to 1 here (design §7 P1 scope; round-aware callers land
-        in P4).
+        ``round`` defaults to 1 (round 1 / Variant A, unchanged behaviour);
+        round-aware callers (P4) pass it explicitly.
         """
         pack_json = pack.model_dump_json()
 
@@ -57,17 +56,18 @@ class PostgresStudyPackRepository:
             INSERT INTO study_packs (
                 family_id, cycle_id, pack, round
             ) VALUES (
-                %(family_id)s, %(cycle_id)s, %(pack)s::jsonb, 1
+                %(family_id)s, %(cycle_id)s, %(pack)s::jsonb, %(round)s
             )
             ON CONFLICT (cycle_id, round) DO UPDATE SET
                 pack       = EXCLUDED.pack,
                 created_at = now()
-            RETURNING id, family_id, cycle_id, pack, approved_at, created_at
+            RETURNING id, family_id, cycle_id, pack, approved_at, created_at, round
             """,
             {
                 "family_id": str(family_id),
                 "cycle_id": str(cycle_id),
                 "pack": pack_json,
+                "round": round,
             },
         )
         row = cur.fetchone()
@@ -75,21 +75,20 @@ class PostgresStudyPackRepository:
         self._conn.commit()
         return _row_to_study_pack_row(row)
 
-    def get_for_cycle(self, cycle_id: uuid.UUID) -> StudyPackRow | None:
-        """Return the round-1 study pack row for a cycle, or None if not yet generated.
+    def get_for_cycle(self, cycle_id: uuid.UUID, round: int = 1) -> StudyPackRow | None:  # noqa: A002
+        """Return the study pack row for a cycle + round, or None if not yet generated.
 
-        P1: this Protocol method is not yet round-parameterized (design §7 P1
-        scope — round-aware callers land in P4), so it is pinned to round=1,
-        matching the only round upsert() currently writes.
+        ``round`` defaults to 1 (round 1 / Variant A, unchanged behaviour);
+        round-aware callers (P4) pass it explicitly.
         """
         cur = self._conn.cursor()
         cur.execute(
             """
-            SELECT id, family_id, cycle_id, pack, approved_at, created_at
+            SELECT id, family_id, cycle_id, pack, approved_at, created_at, round
             FROM study_packs
-            WHERE cycle_id = %s AND round = 1
+            WHERE cycle_id = %s AND round = %s
             """,
-            (str(cycle_id),),
+            (str(cycle_id), round),
         )
         row = cur.fetchone()
         if row is None:
@@ -100,24 +99,28 @@ class PostgresStudyPackRepository:
         self,
         cycle_id: uuid.UUID,
         approved_at: datetime,
+        round: int = 1,  # noqa: A002
     ) -> StudyPackRow:
-        """Record parent approval: set approved_at on the study pack row (round 1, P1 scope)."""
+        """Record parent approval: set approved_at on the study pack row for this round."""
         cur = self._conn.cursor()
         cur.execute(
             """
             UPDATE study_packs
             SET approved_at = %(approved_at)s
-            WHERE cycle_id = %(cycle_id)s AND round = 1
-            RETURNING id, family_id, cycle_id, pack, approved_at, created_at
+            WHERE cycle_id = %(cycle_id)s AND round = %(round)s
+            RETURNING id, family_id, cycle_id, pack, approved_at, created_at, round
             """,
             {
                 "cycle_id": str(cycle_id),
                 "approved_at": approved_at.isoformat(),
+                "round": round,
             },
         )
         row = cur.fetchone()
         if row is None:
-            raise ValueError(f"No study pack found for cycle {cycle_id} — generate one first.")
+            raise ValueError(
+                f"No study pack found for cycle {cycle_id} round {round} — generate one first."
+            )
         self._conn.commit()
         return _row_to_study_pack_row(row)
 
@@ -148,4 +151,5 @@ def _row_to_study_pack_row(row: dict[str, Any]) -> StudyPackRow:
         pack=pack,
         approved_at=_to_dt_opt(row["approved_at"]),
         created_at=_to_dt(row["created_at"]),
+        round=int(row["round"]),
     )

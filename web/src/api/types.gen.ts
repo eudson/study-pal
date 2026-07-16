@@ -1109,6 +1109,10 @@ export type GapReportResponse = {
      */
     submission_id: string;
     report: GapReport;
+    /**
+     * Round
+     */
+    round?: number;
 };
 
 /**
@@ -1986,6 +1990,10 @@ export type StudyPackResponse = {
      * Null until the parent approves; set by POST .../study-pack/approve.
      */
     approved_at?: string | null;
+    /**
+     * Round
+     */
+    round?: number;
 };
 
 /**
@@ -3125,7 +3133,12 @@ export type GetGapReportData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/gap-report';
 };
 
@@ -3155,7 +3168,12 @@ export type GenerateGapReportData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/gap-report';
 };
 
@@ -3185,7 +3203,12 @@ export type GetStudyPackData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/study-pack';
 };
 
@@ -3215,7 +3238,12 @@ export type GenerateStudyPackData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/study-pack';
 };
 
@@ -3245,7 +3273,12 @@ export type ApproveStudyPackData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/study-pack/approve';
 };
 
@@ -3275,7 +3308,12 @@ export type GetStudyPackPdfData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/study-pack/pdf';
 };
 
@@ -3303,7 +3341,12 @@ export type GetChildResultsData = {
          */
         cycle_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Variant
+         */
+        variant?: 'A' | 'B';
+    };
     url: '/cycles/{cycle_id}/child-results';
 };
 
