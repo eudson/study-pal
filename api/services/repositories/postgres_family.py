@@ -24,6 +24,7 @@ from schemas.family import (
     ChildResponse,
     ChildUpdate,
     CycleResponse,
+    CycleRoundApproval,
     CycleState,
     FamilyResponse,
     SubjectResponse,
@@ -391,6 +392,94 @@ class PostgresFamilyRepository:
         self._conn.commit()
         return _row_to_cycle(row)
 
+    # -- Per-round approvals (design §4.6 `cycle_round_approvals`) --
+    #
+    # Dual-written alongside the single-valued `cycles` approval columns
+    # above; family_id is derived from the cycle row (never accepted from
+    # the client — invariant 3).
+
+    def record_round_draft_approval(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+        approved_at: datetime,
+        note: str | None,
+    ) -> CycleRoundApproval:
+        cur = self._conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO cycle_round_approvals
+                (cycle_id, family_id, round, draft_approved_at, draft_approval_note)
+            SELECT %s, c.family_id, %s, %s, %s
+            FROM cycles c WHERE c.id = %s
+            ON CONFLICT (cycle_id, round) DO UPDATE
+            SET draft_approved_at   = EXCLUDED.draft_approved_at,
+                draft_approval_note = EXCLUDED.draft_approval_note
+            RETURNING cycle_id, round, draft_approved_at, draft_approval_note,
+                      marks_published_at, published_visibility
+            """,
+            (str(cycle_id), round, approved_at, note, str(cycle_id)),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError(f"Cycle {cycle_id} not found or not accessible")
+        self._conn.commit()
+        return _row_to_round_approval(row)
+
+    def record_round_publish(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+        published_at: datetime,
+        visibility: VisibilityDefaults,
+    ) -> CycleRoundApproval:
+        cur = self._conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO cycle_round_approvals
+                (cycle_id, family_id, round, marks_published_at, published_visibility)
+            SELECT %s, c.family_id, %s, %s, %s::jsonb
+            FROM cycles c WHERE c.id = %s
+            ON CONFLICT (cycle_id, round) DO UPDATE
+            SET marks_published_at   = EXCLUDED.marks_published_at,
+                published_visibility = EXCLUDED.published_visibility
+            RETURNING cycle_id, round, draft_approved_at, draft_approval_note,
+                      marks_published_at, published_visibility
+            """,
+            (
+                str(cycle_id),
+                round,
+                published_at,
+                visibility.model_dump_json(),
+                str(cycle_id),
+            ),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError(f"Cycle {cycle_id} not found or not accessible")
+        self._conn.commit()
+        return _row_to_round_approval(row)
+
+    def get_round_approval(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+    ) -> CycleRoundApproval | None:
+        cur = self._conn.cursor()
+        cur.execute(
+            """
+            SELECT cycle_id, round, draft_approved_at, draft_approval_note,
+                   marks_published_at, published_visibility
+            FROM cycle_round_approvals
+            WHERE cycle_id = %s AND round = %s
+            """,
+            (str(cycle_id), round),
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        return _row_to_round_approval(row)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -474,4 +563,29 @@ def _row_to_cycle(row: dict[str, object]) -> CycleResponse:
         created_at=_parse_dt(row["created_at"]),
         updated_at=_parse_dt(row["updated_at"]),
         assessments=assessments,
+    )
+
+
+def _row_to_round_approval(row: dict[str, object]) -> CycleRoundApproval:
+    published_visibility_raw = row.get("published_visibility")
+    published_visibility: VisibilityDefaults | None = None
+    if published_visibility_raw is not None:
+        if isinstance(published_visibility_raw, dict):
+            published_visibility = VisibilityDefaults.model_validate(published_visibility_raw)
+        elif isinstance(published_visibility_raw, str):
+            published_visibility = VisibilityDefaults.model_validate_json(published_visibility_raw)
+
+    return CycleRoundApproval(
+        cycle_id=uuid.UUID(str(row["cycle_id"])),
+        round=int(row["round"]),  # type: ignore[call-overload]
+        draft_approved_at=(
+            _parse_dt(row["draft_approved_at"]) if row.get("draft_approved_at") else None
+        ),
+        draft_approval_note=(
+            str(row["draft_approval_note"]) if row.get("draft_approval_note") else None
+        ),
+        marks_published_at=(
+            _parse_dt(row["marks_published_at"]) if row.get("marks_published_at") else None
+        ),
+        published_visibility=published_visibility,
     )

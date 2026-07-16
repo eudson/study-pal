@@ -141,6 +141,32 @@ def round_phase_to_state(round: int, phase: CyclePhase) -> CycleState:  # noqa: 
 
 
 # ---------------------------------------------------------------------------
+# Per-round approval record (docs/design/round-phase-architecture.md §4.6,
+# `cycle_round_approvals` table).  Dual-written alongside the shadowed
+# single-valued `cycles` approval columns through P2-P3; not yet a read path
+# for any router (that switch is P4).
+# ---------------------------------------------------------------------------
+
+
+class CycleRoundApproval(BaseModel):
+    """One row of ``cycle_round_approvals`` — approval state for one round.
+
+    ``draft_*`` fields are written at the ``DRAFT_REVIEW -> PRINTED`` gate;
+    ``marks_published_at`` / ``published_visibility`` at the publish gate
+    (``REVIEW_MARKS -> PUBLISHED``).  Both gates are child-visible transitions
+    requiring recorded parent approval (golden rule 8), now tracked per round
+    so round 2 can never clobber round 1's approval.
+    """
+
+    cycle_id: uuid.UUID
+    round: int
+    draft_approved_at: datetime | None = None
+    draft_approval_note: str | None = None
+    marks_published_at: datetime | None = None
+    published_visibility: VisibilityDefaults | None = None
+
+
+# ---------------------------------------------------------------------------
 # Family
 # ---------------------------------------------------------------------------
 

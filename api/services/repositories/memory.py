@@ -14,6 +14,7 @@ from schemas.family import (
     ChildResponse,
     ChildUpdate,
     CycleResponse,
+    CycleRoundApproval,
     CycleState,
     FamilyResponse,
     SubjectResponse,
@@ -62,6 +63,8 @@ class InMemoryFamilyRepository:
         self._subjects: dict[uuid.UUID, SubjectResponse] = {}
         self._cycles: dict[uuid.UUID, CycleResponse] = {}
         self._cycle_scope: dict[uuid.UUID, str] = {}
+        # (cycle_id, round) -> CycleRoundApproval (design §4.6)
+        self._round_approvals: dict[tuple[uuid.UUID, int], CycleRoundApproval] = {}
 
     # -- Family --
 
@@ -252,6 +255,45 @@ class InMemoryFamilyRepository:
         )
         self._cycles[cycle_id] = updated
         return updated
+
+    # -- Per-round approvals (design §4.6) --
+
+    def record_round_draft_approval(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+        approved_at: datetime,
+        note: str | None,
+    ) -> CycleRoundApproval:
+        key = (cycle_id, round)
+        existing = self._round_approvals.get(key)
+        updated = (existing or CycleRoundApproval(cycle_id=cycle_id, round=round)).model_copy(
+            update={"draft_approved_at": approved_at, "draft_approval_note": note}
+        )
+        self._round_approvals[key] = updated
+        return updated
+
+    def record_round_publish(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+        published_at: datetime,
+        visibility: VisibilityDefaults,
+    ) -> CycleRoundApproval:
+        key = (cycle_id, round)
+        existing = self._round_approvals.get(key)
+        updated = (existing or CycleRoundApproval(cycle_id=cycle_id, round=round)).model_copy(
+            update={"marks_published_at": published_at, "published_visibility": visibility}
+        )
+        self._round_approvals[key] = updated
+        return updated
+
+    def get_round_approval(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+    ) -> CycleRoundApproval | None:
+        return self._round_approvals.get((cycle_id, round))
 
 
 class InMemorySubmissionRepository:

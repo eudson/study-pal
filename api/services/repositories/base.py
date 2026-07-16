@@ -17,6 +17,7 @@ from schemas.family import (
     ChildResponse,
     ChildUpdate,
     CycleResponse,
+    CycleRoundApproval,
     CycleState,
     FamilyResponse,
     SubjectResponse,
@@ -129,6 +130,48 @@ class FamilyRepository(Protocol):
         published_visibility: VisibilityDefaults,
     ) -> CycleResponse:
         """Record marks publish: set state, marks_published_at, published_visibility."""
+        ...
+
+    # -- Per-round approvals (design §4.6 `cycle_round_approvals`) --
+    #
+    # Dual-written alongside the single-valued `cycles` approval columns
+    # (parent_approval_at/note, marks_published_at/published_visibility)
+    # through P2-P3; these are additive, not yet a read path (P4).
+
+    def record_round_draft_approval(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+        approved_at: datetime,
+        note: str | None,
+    ) -> CycleRoundApproval:
+        """Upsert the draft-approval half of a round's approval row.
+
+        Keyed on (cycle_id, round); does not disturb an existing publish
+        half of the same row.
+        """
+        ...
+
+    def record_round_publish(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+        published_at: datetime,
+        visibility: VisibilityDefaults,
+    ) -> CycleRoundApproval:
+        """Upsert the publish half of a round's approval row.
+
+        Keyed on (cycle_id, round); does not disturb an existing draft
+        half of the same row.
+        """
+        ...
+
+    def get_round_approval(
+        self,
+        cycle_id: uuid.UUID,
+        round: int,  # noqa: A002
+    ) -> CycleRoundApproval | None:
+        """Return the approval row for (cycle_id, round), or None if absent."""
         ...
 
 
