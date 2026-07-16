@@ -327,6 +327,13 @@
   outline-offset: var(--focus-offset);
 }
 
+/* Hint under a disabled secondary button explaining what unlocks it. */
+.disabledHint {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  margin: calc(-1 * var(--sp-2)) 0 0;
+}
+
 /* Spinner */
 .spinner {
   width: 48px;

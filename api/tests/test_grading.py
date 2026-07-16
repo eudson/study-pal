@@ -459,7 +459,7 @@ class TestCalculation:
 
 class TestTableCompletion:
     def _table_assessment(self) -> Assessment:
-        # Maths B.2: table_completion, total=2.0
+        # Maths B.2: table_completion, total=3.0
         return _assessment(maths_assessment())
 
     def test_table_is_claude_assist(self) -> None:
@@ -911,7 +911,7 @@ class TestQuestionMarksRLS:
             INSERT INTO assessments (
                 id, family_id, cycle_id, variant, subject, content_language,
                 declared_total_marks, computed_total_marks, assessment, schema_version
-            ) VALUES (%s, %s, %s, 'A', 'Maths', 'en', 8.0, 8.0, %s::jsonb, '1.0')
+            ) VALUES (%s, %s, %s, 'A', 'Maths', 'en', 9.0, 9.0, %s::jsonb, '1.0')
             """,
             (
                 asmt_id,

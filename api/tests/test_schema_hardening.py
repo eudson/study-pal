@@ -54,8 +54,8 @@ class TestMathsSamplePositive:
     def test_maths_sample_validates(self) -> None:
         """Multi-section Maths assessment with calculation/table/fill_blank/mcq validates."""
         a = _validate(maths_assessment())
-        assert a.computed_total_marks == 8.0
-        assert a.declared_total_marks == 8.0
+        assert a.computed_total_marks == 9.0
+        assert a.declared_total_marks == 9.0
         assert a.content_language == "en"
 
     def test_maths_section_a_marks(self) -> None:
@@ -66,7 +66,7 @@ class TestMathsSamplePositive:
     def test_maths_section_b_marks(self) -> None:
         a = _validate(maths_assessment())
         section_b = next(s for s in a.sections if s.label == "B")
-        assert section_b.computed_marks == 5.0
+        assert section_b.computed_marks == 6.0
 
     def test_maths_calculation_grading_path(self) -> None:
         """Calculation question must have CLAUDE_ASSIST grading path."""
@@ -383,7 +383,7 @@ class TestSectionTotalMismatch:
         raw = maths_assessment()
         # Section A declares 3.0 but we inflate it to 9.0
         raw["sections"][0]["declared_marks"] = 9.0
-        raw["declared_total_marks"] = 14.0  # keep grand total consistent for isolation
+        raw["declared_total_marks"] = 15.0  # keep grand total consistent for isolation
         _expect_error(raw, "section a")
 
     def test_grand_total_mismatch_rejected(self) -> None:
@@ -451,7 +451,7 @@ class TestHalfMarksMaths:
             }
         )
         raw["sections"][0]["declared_marks"] = 3.5
-        raw["declared_total_marks"] = 8.5
+        raw["declared_total_marks"] = 9.5
         _validate(raw)
 
     def test_quarter_mark_rejected(self) -> None:
@@ -459,7 +459,7 @@ class TestHalfMarksMaths:
         raw = copy.deepcopy(maths_assessment())
         raw["sections"][0]["questions"][0]["mark_rules"]["total"] = 0.25
         raw["sections"][0]["declared_marks"] = 2.25
-        raw["declared_total_marks"] = 7.25
+        raw["declared_total_marks"] = 8.25
         with pytest.raises(ValidationError) as exc_info:
             Assessment.model_validate(raw)
         errors_str = str(exc_info.value)

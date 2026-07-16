@@ -9,8 +9,8 @@ Exercises:
 
 Totals reconcile:
   Section A: mcq(1.0) + fill_blank(2.0) = 3.0
-  Section B: calculation(3.0) + table_completion(2.0) = 5.0
-  Grand total: 8.0
+  Section B: calculation(3.0) + table_completion(3.0) = 6.0
+  Grand total: 9.0
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def maths_assessment() -> dict[str, Any]:
             "Show all working in the spaces provided.",
             "Half-marks are awarded for correct method with an incorrect final answer.",
         ],
-        "declared_total_marks": 8.0,
+        "declared_total_marks": 9.0,
         "sections": [
             {
                 "label": "A",
@@ -101,7 +101,7 @@ def maths_assessment() -> dict[str, Any]:
                     "Show all working. Method marks are awarded even if the "
                     "final answer is incorrect."
                 ),
-                "declared_marks": 5.0,
+                "declared_marks": 6.0,
                 "questions": [
                     {
                         # calculation with answer_marks + method_marks split and method_steps
@@ -188,15 +188,27 @@ def maths_assessment() -> dict[str, Any]:
                                     "accepted": ["1.5", "1,5"],
                                     "half_mark": True,
                                 },
+                                {
+                                    "row": 3,
+                                    "col": 0,
+                                    "accepted": ["2500", "2 500", "2500 mℓ"],
+                                    "half_mark": True,
+                                },
+                                {
+                                    "row": 3,
+                                    "col": 1,
+                                    "accepted": ["2.5", "2,5"],
+                                    "half_mark": True,
+                                },
                             ],
                             "format_example_row": True,
                         },
-                        # 4 half-mark cells = 2.0 marks total
-                        "mark_rules": {"total": 2.0},
+                        # 6 half-mark cells = 3.0 marks total
+                        "mark_rules": {"total": 3.0},
                         "render_hints": {"layout": "table", "working_lines": 0},
                         "memo": {
                             "worked_solution": (
-                                "500 mℓ = 0.5 ℓ; 1 500 mℓ = 1.5 ℓ. "
+                                "500 mℓ = 0.5 ℓ; 1 500 mℓ = 1.5 ℓ; 2 500 mℓ = 2.5 ℓ. "
                                 "Award 0.5 per correctly filled cell."
                             )
                         },

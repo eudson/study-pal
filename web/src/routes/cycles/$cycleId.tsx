@@ -2,10 +2,17 @@ import { createFileRoute, useNavigate, useMatches, Outlet, Link } from "@tanstac
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { getCycle, generateAssessmentForCycle, approveCycleDraft, generateVariantB } from "../../api/sdk.gen";
+import {
+  getCycle,
+  generateAssessmentForCycle,
+  approveCycleDraft,
+  generateVariantB,
+  listQuestionMarks,
+} from "../../api/sdk.gen";
 import type { Assessment, Section, Question, CycleResponse } from "../../api/types.gen";
 import { StickerButton } from "../../components/StickerButton";
 import { Chip } from "../../components/Chip";
+import { allResolved } from "./$cycleId.review";
 import styles from "./-cycle.module.css";
 
 export const Route = createFileRoute("/cycles/$cycleId")({
@@ -771,6 +778,28 @@ function PublishedPage({ cycleId }: { cycleId: string }) {
 function VariantBPage({ cycleId }: { cycleId: string }) {
   const navigate = useNavigate();
 
+  // Variant B marks: fetched once so we know whether "Review retest marks"
+  // and "View comparison" are actionable yet. Before B has been captured +
+  // graded, the marks endpoint 404s/409s — that's an expected "not ready"
+  // state here, not an error to surface (unlike the review page itself).
+  const { data: marksB, isLoading: marksBLoading } = useQuery({
+    queryKey: ["marks", cycleId, "b"],
+    queryFn: async () => {
+      const res = await listQuestionMarks({
+        path: { cycle_id: cycleId },
+        query: { variant: "B" },
+      });
+      if (res.error) return null;
+      return res.data ?? null;
+    },
+    retry: false,
+  });
+
+  const marksBExist = !!marksB && marksB.items.length > 0;
+  const comparisonReady = !!marksB && allResolved(marksB.items);
+  const reviewDisabled = marksBLoading || !marksBExist;
+  const comparisonDisabled = marksBLoading || !comparisonReady;
+
   return (
     <div className={styles.shell}>
       <div className={styles.draftHeader}>
@@ -810,6 +839,7 @@ function VariantBPage({ cycleId }: { cycleId: string }) {
         <button
           type="button"
           className={styles.secondaryBtn}
+          disabled={reviewDisabled}
           onClick={() =>
             void navigate({
               to: "/cycles/$cycleId/review",
@@ -820,9 +850,13 @@ function VariantBPage({ cycleId }: { cycleId: string }) {
         >
           Review retest marks
         </button>
+        {reviewDisabled && (
+          <p className={styles.disabledHint}>Enter retest answers first</p>
+        )}
         <button
           type="button"
           className={styles.secondaryBtn}
+          disabled={comparisonDisabled}
           onClick={() =>
             void navigate({
               to: "/cycles/$cycleId/comparison",
@@ -832,6 +866,9 @@ function VariantBPage({ cycleId }: { cycleId: string }) {
         >
           View comparison
         </button>
+        {comparisonDisabled && (
+          <p className={styles.disabledHint}>Finish marking the retest first</p>
+        )}
       </div>
     </div>
   );
