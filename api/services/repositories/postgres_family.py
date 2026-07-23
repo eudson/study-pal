@@ -337,18 +337,35 @@ class PostgresFamilyRepository:
         cur = self._conn.cursor()
         cur.execute(
             """
-            UPDATE cycles
-            SET state                = %s,
-                round                = %s,
-                phase                = %s,
-                updated_at           = now(),
-                parent_approval_at   = COALESCE(%s, parent_approval_at),
-                parent_approval_note = COALESCE(%s, parent_approval_note)
-            WHERE id = %s
-            RETURNING id, family_id, subject_id, state, round, phase, scope_text,
-                      parent_approval_at, parent_approval_note,
-                      marks_published_at, published_visibility,
-                      created_at, updated_at
+            WITH updated AS (
+                UPDATE cycles
+                SET state                = %s,
+                    round                = %s,
+                    phase                = %s,
+                    updated_at           = now(),
+                    parent_approval_at   = COALESCE(%s, parent_approval_at),
+                    parent_approval_note = COALESCE(%s, parent_approval_note)
+                WHERE id = %s
+                RETURNING id, family_id, subject_id, state, round, phase, scope_text,
+                          parent_approval_at, parent_approval_note,
+                          marks_published_at, published_visibility,
+                          created_at, updated_at
+            )
+            SELECT u.id, u.family_id, u.subject_id, u.state, u.round, u.phase, u.scope_text,
+                   u.parent_approval_at, u.parent_approval_note,
+                   u.marks_published_at, u.published_visibility,
+                   u.created_at, u.updated_at,
+                   COALESCE(
+                       json_agg(a.assessment ORDER BY a.created_at)
+                       FILTER (WHERE a.id IS NOT NULL),
+                       '[]'
+                   ) AS assessments
+            FROM updated u
+            LEFT JOIN assessments a ON a.cycle_id = u.id
+            GROUP BY u.id, u.family_id, u.subject_id, u.state, u.round, u.phase, u.scope_text,
+                     u.parent_approval_at, u.parent_approval_note,
+                     u.marks_published_at, u.published_visibility,
+                     u.created_at, u.updated_at
             """,
             (
                 new_state.value,
@@ -378,18 +395,35 @@ class PostgresFamilyRepository:
         cur = self._conn.cursor()
         cur.execute(
             """
-            UPDATE cycles
-            SET state                 = %s,
-                round                 = %s,
-                phase                 = %s,
-                updated_at            = now(),
-                marks_published_at    = %s,
-                published_visibility  = %s::jsonb
-            WHERE id = %s
-            RETURNING id, family_id, subject_id, state, round, phase, scope_text,
-                      parent_approval_at, parent_approval_note,
-                      marks_published_at, published_visibility,
-                      created_at, updated_at
+            WITH updated AS (
+                UPDATE cycles
+                SET state                 = %s,
+                    round                 = %s,
+                    phase                 = %s,
+                    updated_at            = now(),
+                    marks_published_at    = %s,
+                    published_visibility  = %s::jsonb
+                WHERE id = %s
+                RETURNING id, family_id, subject_id, state, round, phase, scope_text,
+                          parent_approval_at, parent_approval_note,
+                          marks_published_at, published_visibility,
+                          created_at, updated_at
+            )
+            SELECT u.id, u.family_id, u.subject_id, u.state, u.round, u.phase, u.scope_text,
+                   u.parent_approval_at, u.parent_approval_note,
+                   u.marks_published_at, u.published_visibility,
+                   u.created_at, u.updated_at,
+                   COALESCE(
+                       json_agg(a.assessment ORDER BY a.created_at)
+                       FILTER (WHERE a.id IS NOT NULL),
+                       '[]'
+                   ) AS assessments
+            FROM updated u
+            LEFT JOIN assessments a ON a.cycle_id = u.id
+            GROUP BY u.id, u.family_id, u.subject_id, u.state, u.round, u.phase, u.scope_text,
+                     u.parent_approval_at, u.parent_approval_note,
+                     u.marks_published_at, u.published_visibility,
+                     u.created_at, u.updated_at
             """,
             (
                 new_state.value,

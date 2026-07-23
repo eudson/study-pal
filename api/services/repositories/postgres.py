@@ -50,37 +50,50 @@ class PostgresAssessmentRepository:
 
         Promoted columns are derived from *assessment*; the caller cannot
         override them (invariant 5).
+
+        ``round`` (0013_round_phase_assessments.sql: ``NOT NULL DEFAULT 1``,
+        ``UNIQUE(cycle_id, round)``) is likewise never accepted from the
+        caller — it is looked up from the owning cycle row in the same query
+        that resolves ``family_id``, so a round-2 (Variant B) assessment is
+        stored under ``round=2`` instead of silently defaulting to 1 and
+        colliding with round 1's row (this was Bug B: a 500 duplicate-key on
+        the round-2 retest kickoff). ``variant`` stays a derived display
+        label only — no control flow branches on it (design hard rule);
+        ``round`` is the actual source of truth for the unique constraint.
         """
         row_id = uuid.UUID(assessment.assessment_id)
         cycle_id = uuid.UUID(assessment.cycle_id)
         doc = json.loads(assessment.model_dump_json())
 
-        # Resolve family_id from cycles table to avoid the client supplying it.
-        # The RLS policy ensures we can only see rows our user owns.
+        # Resolve family_id AND round from the owning cycle row to avoid the
+        # client supplying either. The RLS policy ensures we can only see
+        # rows our user owns.
         cur = self._conn.cursor()
         cur.execute(
-            "SELECT family_id FROM cycles WHERE id = %s",
+            "SELECT family_id, round FROM cycles WHERE id = %s",
             (str(cycle_id),),
         )
         row = cur.fetchone()
         if row is None:
             raise ValueError(f"cycle {cycle_id} not found or not accessible")
         family_id: uuid.UUID = uuid.UUID(str(row["family_id"]))
+        cycle_round: int = int(row["round"])  # type: ignore[call-overload]
 
         cur.execute(
             """
             INSERT INTO assessments (
-                id, family_id, cycle_id,
+                id, family_id, cycle_id, round,
                 variant, subject, content_language,
                 declared_total_marks, computed_total_marks,
                 assessment, schema_version
             ) VALUES (
-                %(id)s, %(family_id)s, %(cycle_id)s,
+                %(id)s, %(family_id)s, %(cycle_id)s, %(round)s,
                 %(variant)s, %(subject)s, %(content_language)s,
                 %(declared_total_marks)s, %(computed_total_marks)s,
                 %(assessment)s, %(schema_version)s
             )
             ON CONFLICT (id) DO UPDATE SET
+                round                 = EXCLUDED.round,
                 variant               = EXCLUDED.variant,
                 subject               = EXCLUDED.subject,
                 content_language      = EXCLUDED.content_language,
@@ -93,6 +106,7 @@ class PostgresAssessmentRepository:
                 "id": str(row_id),
                 "family_id": str(family_id),
                 "cycle_id": str(cycle_id),
+                "round": cycle_round,
                 "variant": assessment.variant,
                 "subject": assessment.subject,
                 "content_language": assessment.content_language,

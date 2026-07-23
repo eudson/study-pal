@@ -453,3 +453,104 @@ round-1-vs-2 branch in `retest.py`'s comparison helper.
 **Next:** live browser re-test of the uniform loop (round 1 + round 2 through the same pages) on the
 running stack (eu-west-1 already has the P1 schema); then the standing deferrals — live Claude (C4),
 Fixtures E1, Supabase Storage, scoped child session token.
+
+---
+
+## 2026-07-23 — Live browser re-test of the uniform loop (findings)
+
+First real in-browser click-through of the `(round, phase)` uniform loop against the running stack
+(uvicorn `--reload` on :8000 + Vite on :5173, **live eu-west-1 DB**, stub auth). Driven headless via
+the `browse` tool; parent identity seeded by injecting a Supabase session into localStorage for a
+freshly bootstrapped stub user (`X-User-Id`, stub-auth mode). Pushed the 6 local P2–P6 commits to
+`origin/main` first (architect-approved).
+
+**Round 1 — GREEN end-to-end.** `SCOPE_UPLOADED → GENERATING → DRAFT_REVIEW → PRINTED →
+ANSWERS_ENTERED → AUTO_MARKED → PARENT_REVIEW_MARKS → GAP_REPORT (PUBLISHED) → STUDY_PACK`, plus the
+child kiosk results view. Verified live: new-cycle + add-child + scope generate (FakeClaude draft),
+approve, memo-free kiosk capture (all question types: OptionGrid/blanks/NumberPad+working/TableGrid),
+submit + auto-grade (exact-match auto-award, non-match → `needs_review`, never auto-zeros), parent
+mark review (half-steps, "left as growing", AI rationale notes), publish (froze the 4-toggle
+`published_visibility` snapshot, AI-rationale OFF), gap report (2 mastered teal / 2 growing plum,
+**no red**, concept-gap chip, half-marks 4.5/9), study pack (structured items + **valid WeasyPrint
+PDF** 17KB + recorded parent approval), and the child results view. **Child-results projection is
+clean**: server-filtered from the frozen snapshot, `ai_rationale: null` (toggle was off), **no memo**,
+no AI notes — only the child's own answers. `make lint`/`make test` blind spots not exercised here;
+this was the live tier the prior sessions flagged as not-yet-run.
+
+**Round 2 (retest) — BLOCKED by two live Postgres-repo bugs.** Clicking "Start Variant B retest"
+(`POST /cycles/{id}/variant-b`) fails and strands the cycle at `round 2 / GENERATING` with no round-2
+assessment. Both are masked by the in-memory test repo, which is why the 447/487 suites are green.
+`ARCHITECT DECISION NEEDED`: fix now (small, scoped) vs schedule.
+
+- **Bug A (404 "No Variant-A assessment found").** `postgres_family.py::update_cycle_state`'s
+  `RETURNING` clause omits the `assessments` aggregate that `get_cycle` builds via the `json_agg`
+  LEFT JOIN. So `start_next_round` (`services/cycle.py`) returns a `CycleResponse` with
+  `assessments=[]`, and `routers/retest.py::generate_variant_b` → `resolve_assessment(cycle,"A")`
+  (`services/phase.py:118`, filters `cycle.assessments` by `.variant`) returns `None` → 404. The
+  memory repo's `update_cycle_state` does `cycle.model_copy(update=…)`, which **preserves**
+  `assessments` → tests never see it. Fix: re-fetch via `get_cycle` after `start_next_round` in the
+  router (or populate `assessments` in `update_cycle_state`'s return).
+- **Bug B (500 duplicate key).** `postgres.py::AssessmentRepository.save`'s `INSERT INTO assessments`
+  never sets `round`. Migration `0013` added `round int NOT NULL DEFAULT 1` + `UNIQUE(cycle_id,
+  round)`. Round-2's assessment therefore defaults to `round=1` and collides with round 1 →
+  duplicate-key 500 (surfaces once Bug A is fixed). Fix: thread `round` (= `cycle.round`) into the
+  assessment save. **Likely same-class risk** for `gap_reports`/`study_packs` saves (also gained
+  `round` + `UNIQUE(cycle_id, round)` in `0011`/`0012`) — audit their repo saves before round 2 runs.
+
+**Root theme:** the P1–P6 round refactor added `round` to persistence, but the Postgres repo layer
+wasn't fully wired to carry it (assessments-in-RETURNING; round-in-INSERT), and the memory-repo test
+tier hides both. **This is exactly the gap the "live smoke not yet run" flag warned about.**
+
+**Other observations (non-blocking):** (a) every API call is 4–8s round-trip to eu-west-1 (remote DB
+latency, not a code bug) — Frankfurt region move is already deferred to go-live; (b) a hard deep-link
+navigation to a cycle URL can flash `{"detail":"Missing identity header"}` when a request fires before
+the auth interceptor attaches `X-User-Id` (transient; recovers on the normal in-app path).
+
+**State left behind:** test family `BrowseTest Family` (stub user `1111…7777`) + one cycle
+`a985dcbb-422c-4e95-98c4-0148afbe333c` stranded at `round 2 / GENERATING` in eu-west-1 — useful as a
+live repro for the two fixes. No code changed, no migration, nothing committed beyond the P2–P6 push.
+
+**Next:** architect call on fixing Bug A + Bug B (and the gap/study-pack round-save audit) so round 2
+runs live, then re-run the round-2 tail (retest generate → draft approve → capture → grade → review →
+publish → comparison → complete) in the browser; then the standing deferrals (C4, E1, Storage).
+
+### Same-session addendum — Bugs A + B fixed (architect-approved "fix both now"), round 2 verified live
+
+Backend agent fixed both at the repo layer (no migration; columns already existed). **Not committed**
+(awaiting approval).
+- **Bug A** — `postgres_family.py::update_cycle_state` **and** `publish_marks` now wrap the UPDATE in a
+  CTE + the same `json_agg` LEFT JOIN `get_cycle` uses, so their returned `CycleResponse` carries
+  `assessments` (matches the memory repo's `model_copy` semantics). Fixed at the repo root, not with a
+  router re-fetch, because several routers return that object directly and would otherwise leak
+  `assessments: []` to clients.
+- **Bug B** — `postgres.py::AssessmentRepository.save` now `SELECT`s `round` from the owning cycle
+  (alongside the `family_id` it already fetched) and threads it into the INSERT + `ON CONFLICT`.
+  `variant` stays a display label; `round` is the unique-constraint source of truth.
+- **Audit:** `gap_reports`/`study_packs` saves were already correct (explicit `round` param, callers
+  pass `round=round_`) — done right in P4-2.
+- **New DB-tier tests** `api/tests/test_retest_postgres_repo_bugs.py`, proven regressions (reverting
+  each fix reproduces the exact 404 / `UniqueViolation`). Verification: ruff + mypy clean, `pytest`
+  **488 passed** (DB tier actually running), fixture_gate still the intentional pre-existing red.
+
+**Round 2 re-run — GREEN end to end.** On the same live eu-west-1 cycle: `POST /variant-b` → 201
+(`round 2 / DRAFT_REVIEW`, assessments `['A','B']`, round-2 row persisted at `round=2`), then the
+**same** phase pages round 1 uses (`?variant=b`): draft approve → capture (all types) → auto-grade →
+mark review → publish (froze round-2 snapshot in `cycle_round_approvals[2]`) → A-vs-B comparison →
+**Complete cycle → `CYCLE_COMPLETE / round 2 / COMPLETE`**. The uniform `(round, phase)` loop is now
+verified in a real browser across BOTH rounds. Answered round 2 at 9/9 (vs round 1's 4.5/9); the
+comparison score card correctly shows `A 4.5/9 → B 9/9`.
+
+**New caveat (non-blocking, FakeClaude limitation).** The A-vs-B comparison's closed/persisting/new
+partitioning came back **all-empty** ("0 closed · No comparable areas") despite both round-1 growing
+gaps being resolved. Root cause: the comparison matches on `gap_tags`, but **FakeClaude generates
+assessment questions with `gap_tags: []`** (`derive_gap_report` passes `question.gap_tags` through —
+gap report items show `error_category: "concept_gap"` but `gap_tags: []`, and
+`summary.growing_gap_tags: []`). So the partitioning is a no-op on fakes and will stay empty
+regardless of performance; only the marks-based score card is meaningful. The comparison unit tests
+pass because they construct gap reports with tags directly. **This resolves once C4 (live Claude)
+emits real question `gap_tags`** — or add tags to FakeClaude if the comparison needs exercising before
+C4. Logged for the architect; not a blocker.
+
+**Updated next:** architect approval to commit the two repo fixes + new test; consider seeding
+FakeClaude `gap_tags` so the comparison partitioning is demoable pre-C4; then the standing deferrals
+(C4, E1, Storage, scoped child token).
