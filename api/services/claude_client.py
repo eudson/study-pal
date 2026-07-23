@@ -2,7 +2,11 @@
 
 All Claude calls are made through this interface (ARCHITECTURE.md §8).
 ``FakeClaude`` returns the in-tree Maths/Afrikaans sample assessments in
-round-robin — fully deterministic, zero network, zero tokens.
+round-robin — fully deterministic, zero network, zero tokens. Round-1
+questions are seeded with deterministic ``gap_tags`` (see
+``_seed_deterministic_gap_tags``) so the gap report / A-vs-B comparison
+pipeline has real tags to partition on when exercised end-to-end on
+FakeClaude.
 
 Invariant 7: scope text is length-capped by ``GenerationService`` before
 reaching the client; the client itself does not enforce the cap (single
@@ -73,7 +77,8 @@ class FakeClaude:
         else:
             # Alternate between the two samples.
             samples = [maths_assessment(), afrikaans_assessment()]
-            raw = json.dumps(samples[(self._call_count - 1) % len(samples)])
+            doc = _seed_deterministic_gap_tags(samples[(self._call_count - 1) % len(samples)])
+            raw = json.dumps(doc)
 
         latency = (time.monotonic() - t0) * 1000
         log = CallLog(
@@ -101,6 +106,53 @@ class FakeClaude:
         gaps: list[dict[str, object]] = json.loads(gaps_raw) if gaps_raw.strip() else []
         doc = _derive_variant_b_doc(source, gaps)
         return json.dumps(doc)
+
+
+def _seed_deterministic_gap_tags(doc: dict[str, object]) -> dict[str, object]:
+    """Seed each question's ``gap_tags`` with a stable, deterministic id.
+
+    Round-1 (Variant A / scope) generation must give every question a
+    non-empty ``gap_tags`` entry so the downstream gap report and A-vs-B
+    comparison (``services/gap_report.py``, ``services/comparison.py``) have
+    something to partition on. The real Claude prompt asks the model to
+    tag questions by the underlying concept/skill they test; ``FakeClaude``
+    has no such judgement, so it derives a stand-in tag purely from
+    structural metadata already present on the question — its
+    ``question_type`` plus its position (section label + index within the
+    section). This is:
+
+    - Deterministic: same input dict -> same tags, every call.
+    - Subject-agnostic: never reads ``subject`` / ``content_language`` /
+      question text; only structural fields every question type has
+      (ARCHITECTURE.md golden rule 4 — no ``if subject == ...`` logic).
+    - Stable across rounds: round-2 retargeting (``_derive_variant_b_doc``)
+      re-uses these exact tag strings (as ``GapRetarget.gap_id``), so a gap
+      closed/persisting/newly-surfaced in round 2 is identified correctly by
+      ``derive_ab_comparison``.
+
+    Only fills in tags that are missing (empty/absent) — never overwrites a
+    tag the caller already set (defensive; keeps this idempotent and safe to
+    apply to any doc, including ones a future FakeClaude variant already
+    tags itself).
+    """
+    doc = copy.deepcopy(doc)
+    raw_sections = doc.get("sections")
+    sections: list[object] = raw_sections if isinstance(raw_sections, list) else []
+    for section_obj in sections:
+        if not isinstance(section_obj, dict):
+            continue
+        label = str(section_obj.get("label") or "s").strip().lower() or "s"
+        raw_questions = section_obj.get("questions")
+        questions: list[object] = raw_questions if isinstance(raw_questions, list) else []
+        for index, question_obj in enumerate(questions, start=1):
+            if not isinstance(question_obj, dict):
+                continue
+            existing = question_obj.get("gap_tags")
+            if isinstance(existing, list) and existing:
+                continue
+            question_type = str(question_obj.get("question_type") or "question")
+            question_obj["gap_tags"] = [f"{question_type}-{label}{index}"]
+    return doc
 
 
 def _extract_between(text: str, start_marker: str, end_marker: str) -> str:

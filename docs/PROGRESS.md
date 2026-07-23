@@ -554,3 +554,19 @@ C4. Logged for the architect; not a blocker.
 **Updated next:** architect approval to commit the two repo fixes + new test; consider seeding
 FakeClaude `gap_tags` so the comparison partitioning is demoable pre-C4; then the standing deferrals
 (C4, E1, Storage, scoped child token).
+
+### Same-session addendum 2 — repo fixes committed + FakeClaude gap_tags seeded
+
+- Bug A + Bug B fixes + `test_retest_postgres_repo_bugs.py` **committed and pushed** (`33cfd33`).
+- **Comparison caveat resolved:** `FakeClaude` now seeds deterministic, subject-agnostic `gap_tags`
+  on round-1 questions (`_seed_deterministic_gap_tags`, scheme `"{type}-{section}{index}"`, e.g.
+  `calculation-b1` — derived from structural fields only, never subject/text; golden rule 4). The
+  gap-report passthrough and variant-B retarget already propagated tags — round 1 having them was the
+  only missing hop, so it now cascades: A-growing tag mastered in B → **closed**, still growing →
+  **persisting**, new → **new**. New `test_fakeclaude_gap_tags.py` (4 tests) drives the real
+  GenerationService+FakeClaude pipeline (never hand-builds a GapReport), incl. reproducing the exact
+  live A 4.5/9 → B 9/9 scenario and asserting `closed` non-empty. Verified: ruff+mypy clean, `pytest`
+  **492 passed** (DB tier ran); and confirmed live on the running server — a fresh generate now
+  returns questions with non-empty `gap_tags` (was `[]`). Note (architect FYI): the tag scheme keys a
+  gap to a fixed structural slot, adequate for FakeClaude's fixed 4-question samples; real Claude
+  prompts already do concept-based tagging.
