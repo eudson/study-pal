@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CompleteCycleData, CompleteCycleErrors, CompleteCycleResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GenerateVariantBData, GenerateVariantBErrors, GenerateVariantBResponses, GetAbComparisonData, GetAbComparisonErrors, GetAbComparisonResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
+import type { ApproveCycleDraftData, ApproveCycleDraftErrors, ApproveCycleDraftResponses, ApproveStudyPackData, ApproveStudyPackErrors, ApproveStudyPackResponses, ArchiveChildData, ArchiveChildErrors, ArchiveChildResponses, BootstrapFamilyData, BootstrapFamilyErrors, BootstrapFamilyResponses, CompleteCycleData, CompleteCycleErrors, CompleteCycleResponses, CreateChildData, CreateChildErrors, CreateChildResponses, CreateCycleData, CreateCycleErrors, CreateCycleResponses, CreateSubjectData, CreateSubjectErrors, CreateSubjectResponses, CreateSubmissionData, CreateSubmissionErrors, CreateSubmissionResponses, GenerateAssessmentData, GenerateAssessmentErrors, GenerateAssessmentForCycleData, GenerateAssessmentForCycleErrors, GenerateAssessmentForCycleResponses, GenerateAssessmentResponses, GenerateGapReportData, GenerateGapReportErrors, GenerateGapReportResponses, GenerateStudyPackData, GenerateStudyPackErrors, GenerateStudyPackResponses, GenerateVariantBData, GenerateVariantBErrors, GenerateVariantBResponses, GetAbComparisonData, GetAbComparisonErrors, GetAbComparisonResponses, GetCaptureViewData, GetCaptureViewErrors, GetCaptureViewResponses, GetChildResultsData, GetChildResultsErrors, GetChildResultsResponses, GetCycleData, GetCycleErrors, GetCycleResponses, GetGapReportData, GetGapReportErrors, GetGapReportResponses, GetHealthData, GetHealthResponses, GetStudyPackData, GetStudyPackErrors, GetStudyPackPdfData, GetStudyPackPdfErrors, GetStudyPackPdfResponses, GetStudyPackResponses, GradeSubmissionMarksData, GradeSubmissionMarksErrors, GradeSubmissionMarksResponses, ListChildrenData, ListChildrenResponses, ListCyclesData, ListCyclesResponses, ListFamiliesData, ListFamiliesResponses, ListQuestionMarksData, ListQuestionMarksErrors, ListQuestionMarksResponses, ListSubjectsData, ListSubjectsResponses, MintChildSessionData, MintChildSessionErrors, MintChildSessionResponses, PublishMarksData, PublishMarksErrors, PublishMarksResponses, ReviewQuestionMarkData, ReviewQuestionMarkErrors, ReviewQuestionMarkResponses, UpdateChildData, UpdateChildErrors, UpdateChildResponses, ValidateAssessmentData, ValidateAssessmentErrors, ValidateAssessmentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -248,12 +248,15 @@ export const approveCycleDraft = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Return the memo-free child view of the approved assessment (variant defaults to A; every round requires PRINTED).
+ * Return the memo-free child view of the approved assessment (variant defaults to A; every round requires PRINTED). Accepts a parent Identity or a scope=capture kiosk token.
  *
  * Serve the requested variant's assessment to the child in kiosk mode.
  *
  * Guards:
- * - Cycle exists in the caller's family (RLS enforced in repo layer).
+ * - Cycle exists in the caller's family (RLS enforced in repo layer; for a
+ * kiosk caller this is the token's owning parent's family).
+ * - A kiosk caller's token must match this cycle_id + child_id and carry
+ * scope="capture" (advisor must-fix #4) — 403 otherwise.
  * - Cycle is in the variant's legal capture state (PHASE_CONFIG) — nothing
  * is visible before parent approval (golden rule 8).
  * - Assessment for this cycle + variant exists (generation must have
@@ -264,23 +267,29 @@ export const approveCycleDraft = <ThrowOnError extends boolean = false>(options:
  * reveal the answers.
  */
 export const getCaptureView = <ThrowOnError extends boolean = false>(options: Options<GetCaptureViewData, ThrowOnError>): RequestResult<GetCaptureViewResponses, GetCaptureViewErrors, ThrowOnError> => (options.client ?? client).get<GetCaptureViewResponses, GetCaptureViewErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    security: [
+        { name: 'x-child-session', type: 'apiKey' },
+        { scheme: 'bearer', type: 'http' },
+        { name: 'x-user-id', type: 'apiKey' }
+    ],
     url: '/cycles/{cycle_id}/capture',
     ...options
 });
 
 /**
- * Submit child answers. Advances PRINTED → ANSWERS_ENTERED (every round).
+ * Submit child answers. Advances PRINTED → ANSWERS_ENTERED (every round). Accepts a parent Identity or a scope=capture kiosk token.
  *
  * Accept the child's responses and persist the submission.
  *
  * Server-side guards (none of these trust any client flag):
  * 1. Cycle exists in the caller's family (RLS).
- * 2. The target round's marks are not already published (409) — universal
+ * 2. A kiosk caller's token must match this cycle_id + child_id and carry
+ * scope="capture" (advisor must-fix #4) — 403 otherwise.
+ * 3. The target round's marks are not already published (409) — universal
  * write guard, belt-and-suspenders on top of the phase guard.
- * 3. Cycle is at the variant's legal submit phase (PHASE_CONFIG).
- * 4. body.child_id matches the cycle → subject → child_id chain.
- * 5. All qids in body.responses belong to the variant's assessment.
+ * 4. Cycle is at the variant's legal submit phase (PHASE_CONFIG).
+ * 5. body.child_id matches the cycle → subject → child_id chain.
+ * 6. All qids in body.responses belong to the variant's assessment.
  *
  * On success:
  * - Submission is persisted via SubmissionRepository.
@@ -291,13 +300,40 @@ export const getCaptureView = <ThrowOnError extends boolean = false>(options: Op
  * proof_photo_paths are stored as-is; NEVER fed to grading (§10).
  */
 export const createSubmission = <ThrowOnError extends boolean = false>(options: Options<CreateSubmissionData, ThrowOnError>): RequestResult<CreateSubmissionResponses, CreateSubmissionErrors, ThrowOnError> => (options.client ?? client).post<CreateSubmissionResponses, CreateSubmissionErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    security: [
+        { name: 'x-child-session', type: 'apiKey' },
+        { scheme: 'bearer', type: 'http' },
+        { name: 'x-user-id', type: 'apiKey' }
+    ],
     url: '/cycles/{cycle_id}/submissions',
     ...options,
     headers: {
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Mint a short-lived scoped kiosk token for child capture or results (scope inferred from the cycle's current phase).
+ *
+ * Mint a kiosk token scoped to this cycle, its child, and one purpose.
+ *
+ * Guards:
+ * - Cycle exists in the caller's family (RLS via ``get_family_repository`` —
+ * a non-owner/other-family parent gets 404, never a token).
+ * - Scope is inferred server-side from the cycle's phase — never trusted
+ * from the client:
+ * * ``PRINTED``                                      -> "capture"
+ * * current round's marks published AND that round is
+ * child-visible (``services.phase.round_config``)   -> "results"
+ * * otherwise                                         -> 409
+ * - ``child_id`` is resolved from the cycle's subject, never accepted from
+ * the client.
+ */
+export const mintChildSession = <ThrowOnError extends boolean = false>(options: Options<MintChildSessionData, ThrowOnError>): RequestResult<MintChildSessionResponses, MintChildSessionErrors, ThrowOnError> => (options.client ?? client).post<MintChildSessionResponses, MintChildSessionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    url: '/cycles/{cycle_id}/child-session',
+    ...options
 });
 
 /**
@@ -526,6 +562,8 @@ export const getStudyPackPdf = <ThrowOnError extends boolean = false>(options: O
  * Guards (in order):
  * 1. Caller has a family (RLS — cross-family cycles are invisible → 404).
  * 2. Cycle exists in the caller's family; None → 404.
+ * 2b. A kiosk caller's token must match this cycle_id + child_id and carry
+ * scope="results" (advisor must-fix #4) — 403 otherwise.
  * 3. The target round's marks are published → 409 if not.
  * 4. The target round is child-visible (``round_config(round).results_child_visible``)
  * → 404 if not (round 2's results are parent-only in v1).
@@ -537,7 +575,11 @@ export const getStudyPackPdf = <ThrowOnError extends boolean = false>(options: O
  * 7. Project through the frozen snapshot via ``project_results_for_child``.
  */
 export const getChildResults = <ThrowOnError extends boolean = false>(options: Options<GetChildResultsData, ThrowOnError>): RequestResult<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError> => (options.client ?? client).get<GetChildResultsResponses, GetChildResultsErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }, { name: 'x-user-id', type: 'apiKey' }],
+    security: [
+        { name: 'x-child-session', type: 'apiKey' },
+        { scheme: 'bearer', type: 'http' },
+        { name: 'x-user-id', type: 'apiKey' }
+    ],
     url: '/cycles/{cycle_id}/child-results',
     ...options
 });

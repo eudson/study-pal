@@ -21,6 +21,7 @@ import type { ChildResultItem } from "../../api/types.gen";
 import { ResultSummary } from "../../components/child/ResultSummary";
 import { StampWall } from "../../components/child/StampWall";
 import { StickerButton } from "../../components/StickerButton";
+import { clearKioskSession } from "../../lib/kioskSession";
 
 import styles from "./-results.module.css";
 
@@ -81,6 +82,9 @@ function ChildResultsPage() {
         </p>
         <StickerButton
           onClick={() => {
+            // End of the child's kiosk turn — hand the device back to the
+            // parent-credentialed flow.
+            clearKioskSession();
             void navigate({ to: "/" });
           }}
         >
@@ -114,6 +118,9 @@ function ChildResultsPage() {
         <StickerButton
           className={styles.doneBtn}
           onClick={() => {
+            // End of the child's kiosk turn — hand the device back to the
+            // parent-credentialed flow.
+            clearKioskSession();
             void navigate({ to: "/" });
           }}
         >

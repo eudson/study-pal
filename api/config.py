@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     # Claude (PR-2). Empty until live generation is wired; never committed.
     anthropic_api_key: str = ""
 
+    # Kiosk session secret — scoped, short-lived child capture/results token
+    # (services/kiosk_session.py). Symmetric HS256, fully isolated from the
+    # Supabase JWKS asymmetric verifier above: a different algorithm family,
+    # different key material, never the Supabase JWKS/public key and never the
+    # DB/service-role key. This fixed dev-only default lets dev/test mint and
+    # verify kiosk tokens without any env configured (mirrors
+    # services.auth._STUB_ALLOWED_ENVIRONMENTS). Outside those environments a
+    # missing/too-short/still-default secret must fail closed — see
+    # services.kiosk_session.resolve_kiosk_secret.
+    child_session_secret: str = "studypal-dev-only-kiosk-secret-do-not-use-in-prod"
+
 
 @lru_cache
 def get_settings() -> Settings:

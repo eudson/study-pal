@@ -31,11 +31,18 @@ Security / invariants:
 - Guard order mirrors capture.py / gap_report.py (RLS → 404 → published 409 →
   child-visible-round 404 → resolve data → project → return).
 
-Note on kiosk auth (mirrors capture.py):
-  The kiosk "child mode" runs under the parent's authenticated session.
-  Authorization is the family RLS — there is no separate child auth token.
-  Content-safety boundary is enforced by server-side state guards and the
-  projection in services/child_results.py, not by a client mode flag.
+Note on kiosk auth (hardened — supersedes the prior "accepted risk" note):
+  This endpoint now accepts EITHER a parent ``Identity`` (unchanged
+  behaviour) OR a scoped kiosk token presented via ``X-Child-Session``
+  (``services/kiosk_session.py``, ``get_capture_or_results_caller``).  A
+  kiosk token is verified cryptographically, independent of any stub header,
+  and MUST satisfy ``scope == "results"`` plus an exact match on both
+  ``cycle_id`` and ``child_id`` or the request is 403.  Tenancy for a kiosk
+  request resolves through the SAME ``family_members`` RLS join as a parent
+  request, keyed on the token's owning parent ``user_id`` (``dependencies.py``'s
+  ``*_for_caller`` providers) — never a claim-keyed policy. Content-safety is
+  still enforced by the server-side state guards and the projection in
+  services/child_results.py, not by a client mode flag.
 """
 
 from __future__ import annotations
@@ -47,19 +54,20 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from dependencies import (
-    get_family_repository,
-    get_gap_report_repository,
-    get_question_mark_repository,
-    get_submission_repository,
+    get_family_repository_for_caller,
+    get_gap_report_repository_for_caller,
+    get_question_mark_repository_for_caller,
+    get_submission_repository_for_caller,
 )
+from routers.capture import _enforce_kiosk_scope, _resolve_cycle_child_id
 from routers.families import _resolve_family_id
 from schemas.capture import ChildResponseItem
 from schemas.child_results import ChildResultsView
 from schemas.family import VisibilityDefaults
-from schemas.identity import Identity
-from services.auth import get_identity
+from schemas.identity import RequestCaller
 from services.child_results import project_results_for_child
 from services.gap_report import derive_gap_report
+from services.kiosk_session import get_capture_or_results_caller
 from services.phase import is_published, resolve_assessment, round_config, round_for_variant
 from services.repositories.base import (
     FamilyRepository,
@@ -88,17 +96,19 @@ router = APIRouter(prefix="/cycles")
 def get_child_results(
     cycle_id: uuid.UUID,
     variant: Literal["A", "B"] = "A",
-    identity: Identity = Depends(get_identity),
-    family_repo: FamilyRepository = Depends(get_family_repository),
-    marks_repo: QuestionMarkRepository = Depends(get_question_mark_repository),
-    gap_repo: GapReportRepository = Depends(get_gap_report_repository),
-    submission_repo: SubmissionRepository = Depends(get_submission_repository),
+    caller: RequestCaller = Depends(get_capture_or_results_caller),
+    family_repo: FamilyRepository = Depends(get_family_repository_for_caller),
+    marks_repo: QuestionMarkRepository = Depends(get_question_mark_repository_for_caller),
+    gap_repo: GapReportRepository = Depends(get_gap_report_repository_for_caller),
+    submission_repo: SubmissionRepository = Depends(get_submission_repository_for_caller),
 ) -> ChildResultsView:
     """Return the child-visible published results for a cycle + round.
 
     Guards (in order):
     1. Caller has a family (RLS — cross-family cycles are invisible → 404).
     2. Cycle exists in the caller's family; None → 404.
+    2b. A kiosk caller's token must match this cycle_id + child_id and carry
+        scope="results" (advisor must-fix #4) — 403 otherwise.
     3. The target round's marks are published → 409 if not.
     4. The target round is child-visible (``round_config(round).results_child_visible``)
        → 404 if not (round 2's results are parent-only in v1).
@@ -110,7 +120,7 @@ def get_child_results(
     7. Project through the frozen snapshot via ``project_results_for_child``.
     """
     # Guard 1: caller has a family (RLS seam).
-    _resolve_family_id(identity, family_repo)
+    _resolve_family_id(caller.identity, family_repo)
 
     # Guard 2: cycle exists in the caller's family.
     cycle = family_repo.get_cycle(cycle_id)
@@ -119,6 +129,11 @@ def get_child_results(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cycle not found.",
         )
+
+    # Guard 2b: a kiosk caller's token must match this cycle + child and carry
+    # scope="results" (advisor must-fix #4).
+    cycle_child_id = _resolve_cycle_child_id(cycle, family_repo)
+    _enforce_kiosk_scope(caller, cycle_id, cycle_child_id, "results")
 
     round_ = round_for_variant(variant)
 

@@ -570,3 +570,70 @@ FakeClaude `gap_tags` so the comparison partitioning is demoable pre-C4; then th
   returns questions with non-empty `gap_tags` (was `[]`). Note (architect FYI): the tag scheme keys a
   gap to a fixed structural slot, adequate for FakeClaude's fixed 4-question samples; real Claude
   prompts already do concept-based tagging.
+
+---
+
+## 2026-07-24 — Scoped child kiosk session token (hardens the accepted-risk kiosk mode)
+
+Architect-requested; confirmed no dependency on the other deferrals (pure auth/kiosk). Reverses the
+documented "kiosk = accepted risk" (old ARCHITECTURE §10 decision A / `capture.py` docstring): child
+kiosk screens now run under a **scoped, stateless, short-lived token** instead of the parent's full
+session. Locked decisions: stateless (no `child_sessions` table, no migration), same-device handoff.
+**Advisor security review: REVISE → all 5 must-fixes implemented.** Not committed (awaiting approval).
+
+**The load-bearing constraint (advisor):** RLS tenancy resolves on `user_id` via the `family_members`
+join (`open_authenticated_connection` sets `request.jwt.claims={"sub": user_id}`), NOT `family_id`.
+So the kiosk token's `sub` is the **owning parent's `user_id`**, fed into the UNCHANGED tenancy path;
+`cycle_id`/`child_id`/`family_id` are API-layer assertions only. **No claim-keyed RLS, §10 untouched,
+§4 exit clean, no migration.**
+
+**Backend (`api/`):**
+- `services/kiosk_session.py` — mint/verify a symmetric **HS256** token (dedicated env secret
+  `STUDYPAL_CHILD_SESSION_SECRET`, dev default refused outside dev/test/ci), pinned
+  `algorithms=["HS256"]` (rejects `alg:none`/RS*/ES*), requires `exp`+`scope`+`token_type`+`iss`
+  markers, distinct **`X-Child-Session`** header, verified in isolation from the Supabase asymmetric
+  path (a stub `X-User-Id` can never forge it). `get_capture_or_results_caller` normalizes parent
+  Identity OR kiosk token → `RequestCaller`.
+- `POST /cycles/{id}/child-session` (`mintChildSession`, parent-auth): server-resolves the cycle's
+  child; infers scope from phase — PRINTED → `capture`, published+child-visible round → `results`,
+  else 409. (Capture token minted at PRINTED; results is a SEPARATE post-publish grant — advisor #5.)
+- `capture.py` + `child_results.py` now take `RequestCaller` via `*_for_caller` repo providers
+  (tenancy = `caller.identity.user_id`, unchanged join); `_enforce_kiosk_scope` checks
+  scope+cycle_id+child_id on **both** capture GET and submission POST (advisor #4 — GET previously
+  lacked the child check) and on child-results (`results`).
+- 36 kiosk tests + 12 in `test_capture.py` (mint gating, tamper/alg:none/RS256/expired/wrong
+  scope/cycle/child, isolation matrix, DB-tier cross-family denial via swapped claims).
+
+**Frontend (`web/`):** `lib/kioskSession.ts` (sessionStorage store + expiry + endpoint matcher);
+`apiClient.ts` interceptor sends `X-Child-Session` ONLY for the three kiosk endpoints when a session
+is active (stripping `X-User-Id`/`Authorization`), else parent creds — and defensively neutralizes an
+`@hey-api` security-ordering quirk that would otherwise stamp `X-Child-Session` with the parent JWT.
+"Hand to child" mints-then-navigates on `Enter answers` (capture) and `Show my child their results`
+(results); `clearKioskSession()` on all child-screen exits.
+
+**Verification:** `make lint` clean (api ruff+mypy, web tsc+eslint); `make test` **543 passed** with
+the DB tier actually running (kiosk tenancy tests included), fixture_gate the intentional red; codegen
+regenerated (`mintChildSession` + `ChildSessionResponse`). **Live on the running eu-west-1 stack:**
+mint → 201; kiosk token authorizes `GET /capture` (200), rejected on a parent endpoint (401), wrong
+scope (403), wrong cycle (403), tampered (401); parent creds still work (fallback 200). Full browser
+handoff: `Enter answers` → mint (201) → kiosk session in sessionStorage (scope=capture, 4h exp) →
+`/capture` renders the memo-free questions via the kiosk-authenticated GET. Repro cycle:
+`1b980696-fd5d-4672-b8fb-09202baeb04e` (PRINTED, stub user `1111…7777`).
+
+**Follow-up flags (non-blocking):** (a) **no web test harness** exists — the security-critical
+interceptor + `kioskSession` helpers have no unit test (backend is well-covered); consider adding
+vitest. (b) `results` scope also gates on `round_config(round).results_child_visible`, so in v1 a
+results token is only mintable for round 1 (round-2 results are parent-only) — intended, flagged. (c)
+Pre-existing: a hard deep-link to a cycle URL can flash `{"detail":"Missing identity header"}` / drop
+the parent session; the normal in-app path is fine. (d) True parent-less child routes (cross-device)
+remain deferred — same-device keeps the parent signed in at the SPA router level.
+
+**Proposed ARCHITECTURE §10 addition (awaiting architect OK):**
+> **2026-07-24 — Child kiosk hardened with a scoped session token (supersedes decision A's "accepted
+> risk").** A stateless, short-lived (~4h) HS256 token (`X-Child-Session`, dedicated secret) scopes a
+> child device to ONE cycle+child and only the capture/results endpoints; every other endpoint rejects
+> it. Its `sub` is the owning parent's `user_id`, fed into the unchanged `family_members` RLS join —
+> `cycle_id`/`child_id`/`family_id` are API-layer assertions, never a DB tenancy claim (§10 2026-07-12
+> preserved; §4 exit clean; no migration). Minted by the parent (`POST /cycles/{id}/child-session`),
+> scope inferred from phase. Same-device handoff in v1; cross-device (QR/link) and DB-backed
+> revocation deferred.

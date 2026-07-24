@@ -451,10 +451,15 @@ def _make_overrides(
 ) -> None:
     from dependencies import (
         get_assessment_repository,
+        get_assessment_repository_for_caller,
         get_family_repository,
+        get_family_repository_for_caller,
         get_gap_report_repository,
+        get_gap_report_repository_for_caller,
         get_question_mark_repository,
+        get_question_mark_repository_for_caller,
         get_submission_repository,
+        get_submission_repository_for_caller,
     )
     from main import app
     from services.repositories.memory import (
@@ -471,14 +476,27 @@ def _make_overrides(
     app.dependency_overrides[get_assessment_repository] = lambda: assessment_repo
     app.dependency_overrides[get_submission_repository] = lambda: submission_repo
 
+    # Kiosk-capable variants (routers/capture.py, routers/child_results.py)
+    # back onto the SAME repo instances.
+    app.dependency_overrides[get_family_repository_for_caller] = lambda: family_repo
+    app.dependency_overrides[get_gap_report_repository_for_caller] = lambda: gap_repo
+    app.dependency_overrides[get_question_mark_repository_for_caller] = lambda: marks_repo
+    app.dependency_overrides[get_assessment_repository_for_caller] = lambda: assessment_repo
+    app.dependency_overrides[get_submission_repository_for_caller] = lambda: submission_repo
+
 
 def _clear_overrides() -> None:
     from dependencies import (
         get_assessment_repository,
+        get_assessment_repository_for_caller,
         get_family_repository,
+        get_family_repository_for_caller,
         get_gap_report_repository,
+        get_gap_report_repository_for_caller,
         get_question_mark_repository,
+        get_question_mark_repository_for_caller,
         get_submission_repository,
+        get_submission_repository_for_caller,
     )
     from main import app
 
@@ -487,6 +505,11 @@ def _clear_overrides() -> None:
     app.dependency_overrides.pop(get_question_mark_repository, None)
     app.dependency_overrides.pop(get_assessment_repository, None)
     app.dependency_overrides.pop(get_submission_repository, None)
+    app.dependency_overrides.pop(get_family_repository_for_caller, None)
+    app.dependency_overrides.pop(get_gap_report_repository_for_caller, None)
+    app.dependency_overrides.pop(get_question_mark_repository_for_caller, None)
+    app.dependency_overrides.pop(get_assessment_repository_for_caller, None)
+    app.dependency_overrides.pop(get_submission_repository_for_caller, None)
 
 
 def _cycle_at_study_pack_done_with_gap_report(

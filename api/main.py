@@ -16,6 +16,7 @@ from routers import (
     gap_report,
     grading,
     health,
+    kiosk_session,
     retest,
     review,
     study_pack,
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(families.router)
     app.include_router(cycles.router)
     app.include_router(capture.router)
+    app.include_router(kiosk_session.router)
     app.include_router(grading.router)
     app.include_router(review.router)
     app.include_router(gap_report.router)

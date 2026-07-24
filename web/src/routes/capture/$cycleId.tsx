@@ -47,6 +47,7 @@ import { LabellingBoard } from "../../components/capture/LabellingBoard";
 import { PhotoProofCapture } from "../../components/capture/PhotoProofCapture";
 import { SubmitCelebration } from "../../components/capture/SubmitCelebration";
 import { StickerButton } from "../../components/StickerButton";
+import { clearKioskSession } from "../../lib/kioskSession";
 
 import type {
   ResponseDraft,
@@ -356,7 +357,7 @@ function CapturePage() {
       <div className={styles.errorShell} data-mode="child">
         <h1 className={styles.errorHeading}>Hmm, something's not right</h1>
         <p className={styles.errorText}>{msg}</p>
-        <StickerButton onClick={() => { void navigate({ to: "/" }); }}>
+        <StickerButton onClick={() => { clearKioskSession(); void navigate({ to: "/" }); }}>
           Back to home
         </StickerButton>
       </div>
@@ -370,7 +371,7 @@ function CapturePage() {
       <div className={styles.errorShell} data-mode="child">
         <h1 className={styles.errorHeading}>Not ready yet</h1>
         <p className={styles.errorText}>This test hasn't been approved for answering yet.</p>
-        <StickerButton onClick={() => { void navigate({ to: "/" }); }}>
+        <StickerButton onClick={() => { clearKioskSession(); void navigate({ to: "/" }); }}>
           Back to home
         </StickerButton>
       </div>
@@ -385,7 +386,12 @@ function CapturePage() {
     return (
       <SubmitCelebration
         childName={childName}
-        onDone={() => { void navigate({ to: "/cycles/$cycleId", params: { cycleId } }); }}
+        onDone={() => {
+          // End of the child's kiosk turn — hand the device back to the
+          // parent-credentialed flow.
+          clearKioskSession();
+          void navigate({ to: "/cycles/$cycleId", params: { cycleId } });
+        }}
       />
     );
   }
@@ -430,7 +436,7 @@ function CapturePage() {
     return (
       <div className={styles.errorShell} data-mode="child">
         <h1 className={styles.errorHeading}>No questions found</h1>
-        <StickerButton onClick={() => { void navigate({ to: "/" }); }}>
+        <StickerButton onClick={() => { clearKioskSession(); void navigate({ to: "/" }); }}>
           Back to home
         </StickerButton>
       </div>

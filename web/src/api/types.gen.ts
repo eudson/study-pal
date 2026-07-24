@@ -701,6 +701,30 @@ export type ChildSectionView = {
 };
 
 /**
+ * ChildSessionResponse
+ *
+ * The signed kiosk token plus the metadata the caller needs to use it.
+ *
+ * ``token`` is presented on subsequent kiosk requests via the
+ * ``X-Child-Session`` header (never ``Authorization: Bearer`` — the two
+ * credential planes are kept physically separate).
+ */
+export type ChildSessionResponse = {
+    /**
+     * Token
+     */
+    token: string;
+    /**
+     * Scope
+     */
+    scope: 'capture' | 'results';
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
+
+/**
  * ChildShortAnswerView
  *
  * Short answer — accepted alternatives, required_keywords, marker_guidance excluded.
@@ -2980,6 +3004,36 @@ export type CreateSubmissionResponses = {
 };
 
 export type CreateSubmissionResponse = CreateSubmissionResponses[keyof CreateSubmissionResponses];
+
+export type MintChildSessionData = {
+    body?: never;
+    path: {
+        /**
+         * Cycle Id
+         */
+        cycle_id: string;
+    };
+    query?: never;
+    url: '/cycles/{cycle_id}/child-session';
+};
+
+export type MintChildSessionErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MintChildSessionError = MintChildSessionErrors[keyof MintChildSessionErrors];
+
+export type MintChildSessionResponses = {
+    /**
+     * Successful Response
+     */
+    201: ChildSessionResponse;
+};
+
+export type MintChildSessionResponse = MintChildSessionResponses[keyof MintChildSessionResponses];
 
 export type GradeSubmissionMarksData = {
     body?: never;

@@ -210,19 +210,31 @@ def _make_client(
     """
     from dependencies import (
         get_family_repository,
+        get_family_repository_for_caller,
         get_gap_report_repository,
+        get_gap_report_repository_for_caller,
         get_question_mark_repository,
+        get_question_mark_repository_for_caller,
         get_submission_repository,
+        get_submission_repository_for_caller,
     )
     from main import app
+
+    resolved_submission_repo = submission_repo or InMemorySubmissionRepository()
 
     app.dependency_overrides[get_family_repository] = lambda: family_repo
     app.dependency_overrides[get_question_mark_repository] = lambda: marks_repo
     app.dependency_overrides[get_gap_report_repository] = lambda: gap_repo
-    if submission_repo is not None:
-        app.dependency_overrides[get_submission_repository] = lambda: submission_repo
-    else:
-        app.dependency_overrides[get_submission_repository] = lambda: InMemorySubmissionRepository()
+    app.dependency_overrides[get_submission_repository] = lambda: resolved_submission_repo
+
+    # Kiosk-capable variants (routers/capture.py, routers/child_results.py)
+    # back onto the SAME repo instances.
+    app.dependency_overrides[get_family_repository_for_caller] = lambda: family_repo
+    app.dependency_overrides[get_question_mark_repository_for_caller] = lambda: marks_repo
+    app.dependency_overrides[get_gap_report_repository_for_caller] = lambda: gap_repo
+    app.dependency_overrides[get_submission_repository_for_caller] = lambda: (
+        resolved_submission_repo
+    )
 
     return TestClient(app, raise_server_exceptions=True)
 
@@ -230,9 +242,13 @@ def _make_client(
 def _cleanup() -> None:
     from dependencies import (
         get_family_repository,
+        get_family_repository_for_caller,
         get_gap_report_repository,
+        get_gap_report_repository_for_caller,
         get_question_mark_repository,
+        get_question_mark_repository_for_caller,
         get_submission_repository,
+        get_submission_repository_for_caller,
     )
     from main import app
 
@@ -240,6 +256,10 @@ def _cleanup() -> None:
     app.dependency_overrides.pop(get_question_mark_repository, None)
     app.dependency_overrides.pop(get_gap_report_repository, None)
     app.dependency_overrides.pop(get_submission_repository, None)
+    app.dependency_overrides.pop(get_family_repository_for_caller, None)
+    app.dependency_overrides.pop(get_question_mark_repository_for_caller, None)
+    app.dependency_overrides.pop(get_gap_report_repository_for_caller, None)
+    app.dependency_overrides.pop(get_submission_repository_for_caller, None)
 
 
 # ---------------------------------------------------------------------------

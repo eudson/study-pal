@@ -191,27 +191,45 @@ def _overrides(
 ) -> None:
     from dependencies import (
         get_family_repository,
+        get_family_repository_for_caller,
         get_gap_report_repository,
+        get_gap_report_repository_for_caller,
         get_question_mark_repository,
+        get_question_mark_repository_for_caller,
         get_study_pack_repository,
         get_submission_repository,
+        get_submission_repository_for_caller,
     )
     from main import app
+
+    submission_repo = InMemorySubmissionRepository()
 
     app.dependency_overrides[get_family_repository] = lambda: family_repo
     app.dependency_overrides[get_question_mark_repository] = lambda: marks_repo
     app.dependency_overrides[get_gap_report_repository] = lambda: gap_repo
     app.dependency_overrides[get_study_pack_repository] = lambda: pack_repo
-    app.dependency_overrides[get_submission_repository] = lambda: InMemorySubmissionRepository()
+    app.dependency_overrides[get_submission_repository] = lambda: submission_repo
+
+    # Kiosk-capable variants (routers/capture.py, routers/child_results.py)
+    # back onto the SAME repo instances so parent-Identity and kiosk-token
+    # requests in the same test session see consistent state.
+    app.dependency_overrides[get_family_repository_for_caller] = lambda: family_repo
+    app.dependency_overrides[get_question_mark_repository_for_caller] = lambda: marks_repo
+    app.dependency_overrides[get_gap_report_repository_for_caller] = lambda: gap_repo
+    app.dependency_overrides[get_submission_repository_for_caller] = lambda: submission_repo
 
 
 def _clear_overrides() -> None:
     from dependencies import (
         get_family_repository,
+        get_family_repository_for_caller,
         get_gap_report_repository,
+        get_gap_report_repository_for_caller,
         get_question_mark_repository,
+        get_question_mark_repository_for_caller,
         get_study_pack_repository,
         get_submission_repository,
+        get_submission_repository_for_caller,
     )
     from main import app
 
@@ -220,6 +238,10 @@ def _clear_overrides() -> None:
     app.dependency_overrides.pop(get_gap_report_repository, None)
     app.dependency_overrides.pop(get_study_pack_repository, None)
     app.dependency_overrides.pop(get_submission_repository, None)
+    app.dependency_overrides.pop(get_family_repository_for_caller, None)
+    app.dependency_overrides.pop(get_question_mark_repository_for_caller, None)
+    app.dependency_overrides.pop(get_gap_report_repository_for_caller, None)
+    app.dependency_overrides.pop(get_submission_repository_for_caller, None)
 
 
 class TestGapReportRoundParameterization:

@@ -7,11 +7,13 @@ import {
   generateAssessmentForCycle,
   approveCycleDraft,
   generateVariantB,
+  mintChildSession,
 } from "../../api/sdk.gen";
 import type { Assessment, Section, Question, CycleResponse, CyclePhase } from "../../api/types.gen";
 import { StickerButton } from "../../components/StickerButton";
 import { Chip } from "../../components/Chip";
 import { roundConfig, roundToSearchVariant } from "../../lib/round";
+import { setKioskSession } from "../../lib/kioskSession";
 import styles from "./-cycle.module.css";
 
 export const Route = createFileRoute("/cycles/$cycleId")({
@@ -231,6 +233,39 @@ interface ApprovedPrintedPageProps {
 function ApprovedPrintedPage({ cycle, cycleId, variant }: ApprovedPrintedPageProps) {
   const navigate = useNavigate();
   const isAnswered = cycle.phase === "ANSWERS_ENTERED";
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+
+  // "Hand to child" — mint a scoped kiosk token (scope "capture", inferred
+  // server-side from the PRINTED phase) BEFORE navigating, so the capture
+  // route runs under the narrow child credential rather than the parent's
+  // full session (same-device kiosk handoff).
+  const handoffMutation = useMutation({
+    mutationFn: async () => {
+      setHandoffError(null);
+      const res = await mintChildSession({ path: { cycle_id: cycleId } });
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("Could not start answer entry — please try again.");
+      return res.data;
+    },
+    onSuccess: (session) => {
+      setKioskSession({
+        token: session.token,
+        scope: session.scope,
+        cycleId,
+        expiresAt: session.expires_at,
+      });
+      void navigate({
+        to: "/capture/$cycleId",
+        params: { cycleId },
+        // Round 1 keeps today's clean URL (no query string); round 2+
+        // threads `?variant=b` so capture targets this round.
+        ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
+      });
+    },
+    onError: (err: unknown) => {
+      setHandoffError(err instanceof Error ? err.message : "Could not start answer entry — please try again.");
+    },
+  });
 
   return (
     <div className={styles.shell}>
@@ -263,19 +298,17 @@ function ApprovedPrintedPage({ cycle, cycleId, variant }: ApprovedPrintedPagePro
 
       {!isAnswered && (
         <div className={styles.actionStack}>
+          {handoffError && (
+            <div className={styles.errorBox} role="alert">
+              {handoffError}
+            </div>
+          )}
           <StickerButton
             className={styles.ctaFull}
-            onClick={() =>
-              void navigate({
-                to: "/capture/$cycleId",
-                params: { cycleId },
-                // Round 1 keeps today's clean URL (no query string); round 2+
-                // threads `?variant=b` so capture targets this round.
-                ...(variant === "b" ? { search: { variant: "b" as const } } : {}),
-              })
-            }
+            disabled={handoffMutation.isPending}
+            onClick={() => handoffMutation.mutate()}
           >
-            Enter answers
+            {handoffMutation.isPending ? "Starting…" : "Enter answers"}
           </StickerButton>
         </div>
       )}
@@ -749,6 +782,33 @@ function PublishedPage({ cycleId, round, variant }: PublishedPageProps) {
   const navigate = useNavigate();
   const config = roundConfig(round);
   const searchVariant = variant === "b" ? ({ search: { variant: "b" as const } }) : {};
+  const [resultsHandoffError, setResultsHandoffError] = useState<string | null>(null);
+
+  // "Hand to child" — mint a scoped kiosk token (scope "results", inferred
+  // server-side once this round's marks are published + child-visible)
+  // BEFORE navigating, so the results route runs under the narrow child
+  // credential rather than the parent's full session.
+  const resultsHandoffMutation = useMutation({
+    mutationFn: async () => {
+      setResultsHandoffError(null);
+      const res = await mintChildSession({ path: { cycle_id: cycleId } });
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error("Could not show results — please try again.");
+      return res.data;
+    },
+    onSuccess: (session) => {
+      setKioskSession({
+        token: session.token,
+        scope: session.scope,
+        cycleId,
+        expiresAt: session.expires_at,
+      });
+      void navigate({ to: "/results/$cycleId", params: { cycleId } });
+    },
+    onError: (err: unknown) => {
+      setResultsHandoffError(err instanceof Error ? err.message : "Could not show results — please try again.");
+    },
+  });
 
   return (
     <div className={styles.shell}>
@@ -837,18 +897,21 @@ function PublishedPage({ cycleId, round, variant }: PublishedPageProps) {
             only offered when this round's results are child-visible (design
             §2 table: round 1 yes, round 2+ parent-only in v1). */}
         {config.resultsChildVisible && (
-          <button
-            type="button"
-            className={styles.secondaryBtn}
-            onClick={() =>
-              void navigate({
-                to: "/results/$cycleId",
-                params: { cycleId },
-              })
-            }
-          >
-            Show my child their results
-          </button>
+          <>
+            {resultsHandoffError && (
+              <div className={styles.errorBox} role="alert">
+                {resultsHandoffError}
+              </div>
+            )}
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              disabled={resultsHandoffMutation.isPending}
+              onClick={() => resultsHandoffMutation.mutate()}
+            >
+              {resultsHandoffMutation.isPending ? "Starting…" : "Show my child their results"}
+            </button>
+          </>
         )}
       </div>
     </div>

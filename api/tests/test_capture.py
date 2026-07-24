@@ -21,8 +21,11 @@ from fastapi.testclient import TestClient
 
 from dependencies import (
     get_assessment_repository,
+    get_assessment_repository_for_caller,
     get_family_repository,
+    get_family_repository_for_caller,
     get_submission_repository,
+    get_submission_repository_for_caller,
 )
 from main import app
 from schemas.assessment_schema import Assessment
@@ -35,6 +38,7 @@ from services.cycle import (
     advance_to_parent_reviews,
     approve_draft,
 )
+from services.kiosk_session import mint_kiosk_token, resolve_kiosk_secret
 from services.repositories.base import FamilyRepository, SubmissionRepository
 from services.repositories.memory import (
     InMemoryAssessmentRepository,
@@ -112,6 +116,31 @@ _STUB_HEADER = str(_USER_ID)
 
 def _make_family_repo() -> InMemoryFamilyRepository:
     return InMemoryFamilyRepository(user_id=_USER_ID)
+
+
+def _apply_repo_overrides(
+    family_repo: FamilyRepository,
+    asmt_repo: InMemoryAssessmentRepository,
+    sub_repo: SubmissionRepository,
+) -> None:
+    """Override both the parent-only and kiosk-capable repo providers with
+    the SAME instances, so parent-Identity and kiosk-token requests in the
+    same test see consistent state."""
+    app.dependency_overrides[get_family_repository] = lambda: family_repo
+    app.dependency_overrides[get_assessment_repository] = lambda: asmt_repo
+    app.dependency_overrides[get_submission_repository] = lambda: sub_repo
+    app.dependency_overrides[get_family_repository_for_caller] = lambda: family_repo
+    app.dependency_overrides[get_assessment_repository_for_caller] = lambda: asmt_repo
+    app.dependency_overrides[get_submission_repository_for_caller] = lambda: sub_repo
+
+
+def _pop_repo_overrides() -> None:
+    app.dependency_overrides.pop(get_family_repository, None)
+    app.dependency_overrides.pop(get_assessment_repository, None)
+    app.dependency_overrides.pop(get_submission_repository, None)
+    app.dependency_overrides.pop(get_family_repository_for_caller, None)
+    app.dependency_overrides.pop(get_assessment_repository_for_caller, None)
+    app.dependency_overrides.pop(get_submission_repository_for_caller, None)
 
 
 def _full_assessment_dict() -> dict[str, Any]:
@@ -548,23 +577,10 @@ def client_approved() -> Generator[tuple[TestClient, dict[str, Any]], None, None
         "qid": "A.1",
     }
 
-    def _family() -> FamilyRepository:
-        return family_repo
-
-    def _asmt() -> InMemoryAssessmentRepository:
-        return asmt_repo
-
-    def _sub() -> SubmissionRepository:
-        return sub_repo
-
-    app.dependency_overrides[get_family_repository] = _family
-    app.dependency_overrides[get_assessment_repository] = _asmt
-    app.dependency_overrides[get_submission_repository] = _sub
+    _apply_repo_overrides(family_repo, asmt_repo, sub_repo)
     with TestClient(app) as c:
         yield c, ids
-    app.dependency_overrides.pop(get_family_repository, None)
-    app.dependency_overrides.pop(get_assessment_repository, None)
-    app.dependency_overrides.pop(get_submission_repository, None)
+    _pop_repo_overrides()
 
 
 # ---------------------------------------------------------------------------
@@ -625,26 +641,13 @@ class TestGetCaptureView:
         cycle = family_repo.create_cycle(family.id, subject.id, "scope")
         # Cycle is still in SCOPE_UPLOADED.
 
-        def _family() -> FamilyRepository:
-            return family_repo
-
-        def _asmt() -> InMemoryAssessmentRepository:
-            return asmt_repo
-
-        def _sub() -> SubmissionRepository:
-            return sub_repo
-
-        app.dependency_overrides[get_family_repository] = _family
-        app.dependency_overrides[get_assessment_repository] = _asmt
-        app.dependency_overrides[get_submission_repository] = _sub
+        _apply_repo_overrides(family_repo, asmt_repo, sub_repo)
         with TestClient(app) as c:
             resp = c.get(
                 f"/cycles/{cycle.id}/capture",
                 headers={"x-user-id": _STUB_HEADER},
             )
-        app.dependency_overrides.pop(get_family_repository, None)
-        app.dependency_overrides.pop(get_assessment_repository, None)
-        app.dependency_overrides.pop(get_submission_repository, None)
+        _pop_repo_overrides()
 
         assert resp.status_code == 409
 
@@ -703,18 +706,7 @@ class TestCreateSubmission:
         cycle = family_repo.create_cycle(family.id, subject.id, "scope")
         # Still in SCOPE_UPLOADED.
 
-        def _family() -> FamilyRepository:
-            return family_repo
-
-        def _asmt() -> InMemoryAssessmentRepository:
-            return asmt_repo
-
-        def _sub() -> SubmissionRepository:
-            return sub_repo
-
-        app.dependency_overrides[get_family_repository] = _family
-        app.dependency_overrides[get_assessment_repository] = _asmt
-        app.dependency_overrides[get_submission_repository] = _sub
+        _apply_repo_overrides(family_repo, asmt_repo, sub_repo)
         with TestClient(app) as c:
             resp = c.post(
                 f"/cycles/{cycle.id}/submissions",
@@ -725,9 +717,7 @@ class TestCreateSubmission:
                 },
                 headers={"x-user-id": _STUB_HEADER},
             )
-        app.dependency_overrides.pop(get_family_repository, None)
-        app.dependency_overrides.pop(get_assessment_repository, None)
-        app.dependency_overrides.pop(get_submission_repository, None)
+        _pop_repo_overrides()
 
         assert resp.status_code == 409
 
@@ -806,6 +796,343 @@ class TestCreateSubmission:
             },
         )
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# 4c. Kiosk (X-Child-Session) token tests for capture GET/POST
+# ---------------------------------------------------------------------------
+
+
+def _mint_capture_token(ids: dict[str, Any], *, user_id: uuid.UUID = _USER_ID) -> str:
+    from config import get_settings
+
+    secret = resolve_kiosk_secret(get_settings())
+    token, _expires_at = mint_kiosk_token(
+        secret=secret,
+        user_id=user_id,
+        cycle_id=uuid.UUID(ids["cycle_id"]),
+        child_id=uuid.UUID(ids["child_id"]),
+        family_id=uuid.UUID(ids["family_id"]),
+        scope="capture",
+    )
+    return token
+
+
+class TestKioskCaptureToken:
+    """A valid scope=capture kiosk token authorizes capture GET/POST."""
+
+    def test_kiosk_token_gets_capture_view(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        client, ids = client_approved
+        token = _mint_capture_token(ids)
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["assessment_id"] == ids["assessment_id"]
+
+    def test_kiosk_token_submits(self, client_approved: tuple[TestClient, dict[str, Any]]) -> None:
+        client, ids = client_approved
+        token = _mint_capture_token(ids)
+        resp = client.post(
+            f"/cycles/{ids['cycle_id']}/submissions",
+            json={
+                "child_id": ids["child_id"],
+                "responses": [{"qid": ids["qid"], "attempted": True, "payload": {"answer": "1"}}],
+                "proof_photo_paths": [],
+            },
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_kiosk_token_wrong_cycle_id_403(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        client, ids = client_approved
+        from config import get_settings
+
+        secret = resolve_kiosk_secret(get_settings())
+        token, _ = mint_kiosk_token(
+            secret=secret,
+            user_id=_USER_ID,
+            cycle_id=uuid.uuid4(),  # wrong cycle
+            child_id=uuid.UUID(ids["child_id"]),
+            family_id=uuid.UUID(ids["family_id"]),
+            scope="capture",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 403
+
+    def test_kiosk_token_wrong_child_id_403(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        client, ids = client_approved
+        from config import get_settings
+
+        secret = resolve_kiosk_secret(get_settings())
+        token, _ = mint_kiosk_token(
+            secret=secret,
+            user_id=_USER_ID,
+            cycle_id=uuid.UUID(ids["cycle_id"]),
+            child_id=uuid.uuid4(),  # wrong child
+            family_id=uuid.UUID(ids["family_id"]),
+            scope="capture",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 403
+
+    def test_kiosk_token_submit_wrong_child_id_403(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        client, ids = client_approved
+        from config import get_settings
+
+        secret = resolve_kiosk_secret(get_settings())
+        token, _ = mint_kiosk_token(
+            secret=secret,
+            user_id=_USER_ID,
+            cycle_id=uuid.UUID(ids["cycle_id"]),
+            child_id=uuid.uuid4(),  # wrong child
+            family_id=uuid.UUID(ids["family_id"]),
+            scope="capture",
+        )
+        resp = client.post(
+            f"/cycles/{ids['cycle_id']}/submissions",
+            json={
+                "child_id": ids["child_id"],
+                "responses": [],
+                "proof_photo_paths": [],
+            },
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 403
+
+    def test_kiosk_token_wrong_scope_403(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        """A scope="results" token must not authorize capture."""
+        client, ids = client_approved
+        from config import get_settings
+
+        secret = resolve_kiosk_secret(get_settings())
+        token, _ = mint_kiosk_token(
+            secret=secret,
+            user_id=_USER_ID,
+            cycle_id=uuid.UUID(ids["cycle_id"]),
+            child_id=uuid.UUID(ids["child_id"]),
+            family_id=uuid.UUID(ids["family_id"]),
+            scope="results",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 403
+
+    def test_tampered_signature_401(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        client, ids = client_approved
+        token = _mint_capture_token(ids)
+        tampered = token[:-4] + ("A" if token[-4] != "A" else "B") + token[-3:]
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": tampered},
+        )
+        assert resp.status_code == 401
+
+    def test_expired_token_401(self, client_approved: tuple[TestClient, dict[str, Any]]) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from config import get_settings
+
+        client, ids = client_approved
+        secret = resolve_kiosk_secret(get_settings())
+        token, _ = mint_kiosk_token(
+            secret=secret,
+            user_id=_USER_ID,
+            cycle_id=uuid.UUID(ids["cycle_id"]),
+            child_id=uuid.UUID(ids["child_id"]),
+            family_id=uuid.UUID(ids["family_id"]),
+            scope="capture",
+            now=datetime.now(UTC) - timedelta(hours=5),
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 401
+
+    def test_alg_none_token_401(self, client_approved: tuple[TestClient, dict[str, Any]]) -> None:
+        """A forged alg=none token (no signature at all) must be refused."""
+        import jwt as pyjwt
+
+        client, ids = client_approved
+        forged = pyjwt.encode(
+            {
+                "sub": str(_USER_ID),
+                "cycle_id": ids["cycle_id"],
+                "child_id": ids["child_id"],
+                "family_id": ids["family_id"],
+                "scope": "capture",
+                "iss": "studypal-kiosk",
+                "token_type": "kiosk",
+            },
+            key="",
+            algorithm="none",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": forged},
+        )
+        assert resp.status_code == 401
+
+    def test_asymmetric_rs256_token_401(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        """An RS256-signed token (even a well-formed one) must be refused —
+        the kiosk verifier only accepts HS256."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        client, ids = client_approved
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        token = jwt_lib().encode(
+            {
+                "sub": str(_USER_ID),
+                "cycle_id": ids["cycle_id"],
+                "child_id": ids["child_id"],
+                "family_id": ids["family_id"],
+                "scope": "capture",
+                "iss": "studypal-kiosk",
+                "token_type": "kiosk",
+                "iat": _now(),
+                "exp": _now() + _hours(1),
+            },
+            private_key,
+            algorithm="RS256",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 401
+
+    def test_missing_token_type_401(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        """A token signed with the right secret/alg but missing token_type must fail."""
+        from config import get_settings
+
+        client, ids = client_approved
+        secret = resolve_kiosk_secret(get_settings())
+        token = jwt_lib().encode(
+            {
+                "sub": str(_USER_ID),
+                "cycle_id": ids["cycle_id"],
+                "child_id": ids["child_id"],
+                "family_id": ids["family_id"],
+                "scope": "capture",
+                "iss": "studypal-kiosk",
+                "iat": _now(),
+                "exp": _now() + _hours(1),
+            },
+            secret,
+            algorithm="HS256",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 401
+
+    def test_missing_iss_401(self, client_approved: tuple[TestClient, dict[str, Any]]) -> None:
+        from config import get_settings
+
+        client, ids = client_approved
+        secret = resolve_kiosk_secret(get_settings())
+        token = jwt_lib().encode(
+            {
+                "sub": str(_USER_ID),
+                "cycle_id": ids["cycle_id"],
+                "child_id": ids["child_id"],
+                "family_id": ids["family_id"],
+                "scope": "capture",
+                "token_type": "kiosk",
+                "iat": _now(),
+                "exp": _now() + _hours(1),
+            },
+            secret,
+            algorithm="HS256",
+        )
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 401
+
+    def test_stub_header_cannot_forge_kiosk_identity(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        """A parent's X-User-Id stub credential presented as X-Child-Session
+        must be rejected outright — it is not a valid kiosk token."""
+        client, ids = client_approved
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": _STUB_HEADER},
+        )
+        assert resp.status_code == 401
+
+    def test_kiosk_token_rejected_by_parent_only_endpoint(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        """A kiosk token presented to a strictly parent-only endpoint
+        (GET /cycles) is rejected — that endpoint depends on get_identity,
+        which is asymmetric-only and never consults X-Child-Session."""
+        client, ids = client_approved
+        token = _mint_capture_token(ids)
+        resp = client.get("/cycles", headers={"x-child-session": token})
+        assert resp.status_code == 401
+
+    def test_memo_still_absent_from_kiosk_capture_view(
+        self, client_approved: tuple[TestClient, dict[str, Any]]
+    ) -> None:
+        """Kiosk-authenticated capture view is still memo-free."""
+        client, ids = client_approved
+        token = _mint_capture_token(ids)
+        resp = client.get(
+            f"/cycles/{ids['cycle_id']}/capture",
+            headers={"x-child-session": token},
+        )
+        assert resp.status_code == 200
+        body_str = json.dumps(resp.json())
+        for forbidden in ("correct_index", "final_answer", "worked_solution"):
+            assert forbidden not in body_str
+
+
+def jwt_lib() -> Any:
+    import jwt
+
+    return jwt
+
+
+def _now() -> Any:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC)
+
+
+def _hours(n: int) -> Any:
+    from datetime import timedelta
+
+    return timedelta(hours=n)
 
 
 # ---------------------------------------------------------------------------
